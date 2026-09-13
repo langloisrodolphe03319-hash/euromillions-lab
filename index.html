@@ -135,7 +135,7 @@ async function loadFDJ(){
   else msg("FDJ bloque l'accès automatique depuis le navigateur. Utilise l'import ZIP ci-dessus.");
 }
 
-$("autoFDJ").onclick=loadFDJ;
+$("autoFDJ").onclick=(e)=>{e.stopPropagation();loadFDJ();};
 
 function parseWorkbook(bytes){
  const wb=XLSX.read(bytes,{type:"array",cellDates:true});
