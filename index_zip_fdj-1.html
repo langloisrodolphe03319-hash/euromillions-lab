@@ -1,0 +1,134 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EuroMillions Lab</title>
+<style>
+:root{--bg:#06101b;--panel:#0d1b2c;--line:#203a54;--txt:#edf6ff;--muted:#9badc1;--blue:#46b7ff;--green:#63dfa2;--gold:#ffd35a;--red:#ff7f8d}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(circle at 85% 0,#123a5d,#06101b 42%);color:var(--txt);font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{height:68px;border-bottom:1px solid #ffffff12;display:flex;align-items:center;justify-content:space-between;padding:0 max(20px,calc((100% - 1160px)/2));position:sticky;top:0;background:#06101bea;backdrop-filter:blur(14px);z-index:3}
+.brand{font-weight:900;letter-spacing:.08em}.brand span{color:var(--blue)}nav a{color:var(--muted);text-decoration:none;margin-left:24px}
+.hero,main{max-width:1160px;margin:auto}.hero{padding:64px 20px 42px;display:grid;grid-template-columns:1.3fr .7fr;gap:40px}.eyebrow,.kicker{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:.14em}
+.hero h1{font-size:clamp(42px,6vw,74px);line-height:.98;margin:12px 0 20px}.hero em{font-style:normal;color:var(--blue)}.lead{font-size:18px;color:var(--muted);line-height:1.55}
+.hero-note,.warning{border:1px solid #355575;background:#0d2236;border-radius:14px;padding:20px;line-height:1.55;color:#d8e7f5}.hero-note strong{color:var(--gold)}
+.panel{margin:16px 20px;background:#0d1b2cf2;border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 14px 40px #0004}.section-head{display:flex;justify-content:space-between;align-items:center;gap:20px}h2{font-size:26px;margin:6px 0 18px}
+.drop{border:1px dashed #3b6487;border-radius:14px;padding:28px;text-align:center;cursor:pointer;background:#091829}.drop input{display:none}.drop-title{font-weight:800;font-size:17px}.muted,.tiny{color:var(--muted)}.tiny{font-size:11px;margin-top:7px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px}.metrics>div{background:#091829;padding:15px;border-radius:12px}.metrics b{display:block;font-size:23px}.metrics span{color:var(--muted);font-size:12px}
+.pill{padding:7px 11px;border-radius:30px;font-size:12px}.neutral{background:#152b42;color:#aad8fa}.good{background:#113a2b;color:var(--green)}
+.primary{border:0;background:linear-gradient(90deg,#148fdd,#45baff);color:white;padding:11px 16px;border-radius:9px;font-weight:800;cursor:pointer}.controls{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end}
+.controls label{color:var(--muted);font-size:12px}.controls select,.controls input{display:block;margin-top:5px;width:100%;padding:10px;border:1px solid #31516f;border-radius:9px;background:#081728;color:var(--txt)}
+.empty{padding:22px;border-radius:12px;background:#091829;color:var(--muted);margin-top:14px}.grids{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.ticket{background:linear-gradient(135deg,#102943,#091a2d);border:1px solid #315575;border-radius:14px;padding:15px}
+.ticket-top{display:flex;justify-content:space-between}.score{color:var(--green);font-weight:900}.balls{display:flex;gap:6px;margin:12px 0}.ball{width:37px;height:37px;border-radius:50%;display:grid;place-items:center;background:#eef8ff;color:#08243c;font-weight:800}.star{background:var(--gold);color:#3b2e00}
+.tags span{font-size:11px;background:#142e47;padding:4px 7px;border-radius:15px;color:#b8dcf6;margin-right:4px}.table{width:100%;border-collapse:collapse;margin-top:14px}.table th,.table td{padding:10px;border-bottom:1px solid #1c344b;text-align:left}.table th{color:var(--muted);font-size:12px}
+.warning{margin-top:14px;border-color:#665426;background:#171c23}.warning b{color:var(--gold)}footer{max-width:1160px;margin:35px auto;padding:0 20px;color:#71869b;font-size:12px}
+@media(max-width:800px){.hero{grid-template-columns:1fr;padding-top:45px}.metrics{grid-template-columns:1fr 1fr}.controls,.grids{grid-template-columns:1fr}.top{padding:0 16px}nav{display:none}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script></head><body>
+<header class="top"><div class="brand">EUROMILLIONS <span>LAB</span></div><nav><a href="#dashboard">Analyse</a><a href="#backtest">Backtest</a><a href="#method">Méthode</a></nav></header>
+<section class="hero"><div><p class="eyebrow">LABORATOIRE STATISTIQUE</p><h1>Tester les hypothèses.<br><em>Classer les grilles.</em></h1><p class="lead">Importe directement les archives ZIP officielles FDJ. Le site les ouvre automatiquement, extrait les résultats et construit ses analyses.</p></div><div class="hero-note"><strong>Nouvelle version</strong><br>Tu peux sélectionner plusieurs ZIP FDJ en une seule fois. Les fichiers restent dans ton navigateur.</div></section>
+<main>
+<section class="panel" id="dashboard"><div class="section-head"><div><span class="kicker">01 · DONNÉES</span><h2>Archives FDJ</h2></div><div id="dataState" class="pill neutral">Aucune archive</div></div>
+<div class="drop" id="drop"><input id="files" type="file" accept=".zip,.csv,.txt,.xlsx,.xls" multiple><div class="drop-title">Dépose les archives ZIP FDJ ici</div><div class="muted">ou appuie pour sélectionner une ou plusieurs archives</div><div class="tiny">Les ZIP contenant CSV/Excel sont décompressés et lus automatiquement.</div></div>
+<div class="metrics"><div><b id="mDraws">0</b><span>Tirages</span></div><div><b id="mYears">—</b><span>Période</span></div><div><b>50 + 12</b><span>Numéros / étoiles</span></div><div><b>1 / 139 838 160</b><span>Jackpot / grille</span></div></div>
+</section>
+<section class="panel" id="backtest"><div class="section-head"><div><span class="kicker">02 · VALIDATION</span><h2>Backtesting</h2></div><button id="bt" class="primary">Tester les stratégies</button></div><p class="muted">Entraînement sur le passé, évaluation sur des tirages ultérieurs non vus.</p><div id="backOut" class="empty">Charge les archives puis lance le test.</div></section>
+<section class="panel"><div class="section-head"><div><span class="kicker">03 · GÉNÉRATION</span><h2>Grilles candidates</h2></div></div>
+<div class="controls"><label>Stratégie<select id="strategy"><option value="ensemble" selected>Ensemble adaptatif</option><option value="frequency">Fréquence</option><option value="recency">Récence</option><option value="structure">Structure</option><option value="anti">Diversification</option><option value="random">Référence aléatoire</option></select></label><label>Grilles<input id="count" type="number" min="1" max="20" value="8"></label><label>Fenêtre<input id="window" type="number" min="50" value="500"></label><button id="generate" class="primary">Générer</button></div>
+<div id="gridOut" class="grids empty">Les grilles apparaîtront ici.</div></section>
+<section class="panel" id="method"><div class="section-head"><div><span class="kicker">04 · MÉTHODE</span><h2>Principe</h2></div></div><p class="muted">Le site mesure fréquence, récence, structure et diversification, puis les compare sur des périodes historiques. Aucun score ne transforme un tirage aléatoire en certitude.</p><div class="warning"><b>Source des données :</b> la FDJ met à disposition six archives ZIP couvrant l'historique EuroMillions jusqu'en février 2004. urlVoir les archives officielles FDJhttps://www.fdj.fr/jeux-de-tirage/euromillions-my-million/historique</div></section>
+</main><footer>EuroMillions Lab · outil expérimental · aucune garantie de gain</footer><script>
+const state={draws:[]};
+const $=id=>document.getElementById(id);
+$("drop").onclick=()=>$("files").click();
+$("files").onchange=e=>loadFiles([...e.target.files]);
+$("drop").addEventListener("dragover",e=>e.preventDefault());
+$("drop").addEventListener("drop",e=>{e.preventDefault();loadFiles([...e.dataTransfer.files])});
+
+async function loadFiles(files){
+ if(!files.length)return;
+ $("dataState").textContent="Lecture des archives…"; $("dataState").className="pill neutral";
+ const all=[];
+ for(const file of files){
+   try{
+     const name=file.name.toLowerCase();
+     if(name.endsWith(".zip")){
+       const zip=await JSZip.loadAsync(file);
+       for(const key of Object.keys(zip.files)){
+         const entry=zip.files[key]; if(entry.dir)continue;
+         const n=key.toLowerCase();
+         if(n.endsWith(".csv")||n.endsWith(".txt")||n.endsWith(".xlsx")||n.endsWith(".xls")){
+           try{
+             const bytes=await entry.async("uint8array");
+             if(n.endsWith(".xlsx")||n.endsWith(".xls")) all.push(...parseWorkbook(bytes));
+             else all.push(...parseText(new TextDecoder("utf-8").decode(bytes)));
+           }catch(e){}
+         }
+       }
+     }else if(name.endsWith(".xlsx")||name.endsWith(".xls")){
+       all.push(...parseWorkbook(new Uint8Array(await file.arrayBuffer())));
+     }else{
+       all.push(...parseText(await file.text()));
+     }
+   }catch(e){console.warn(file.name,e)}
+ }
+ const map=new Map();
+ for(const d of all){if(d.n.length===5&&d.s.length===2)map.set(d.key,d)}
+ state.draws=[...map.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+ updateState();
+}
+function parseWorkbook(bytes){
+ const wb=XLSX.read(bytes,{type:"array",cellDates:true});
+ let out=[];
+ for(const sn of wb.SheetNames)out.push(...parseRows(XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:false,defval:""})));
+ return out;
+}
+function parseText(text){
+ const lines=text.replace(/\r/g,"").split("\n").filter(Boolean);
+ if(!lines.length)return[];
+ const rows=lines.map(x=>x.split(/[;\t,]/).map(s=>s.trim().replace(/^"|"$/g,"")));
+ return parseRows(rows);
+}
+function norm(s){return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()}
+function parseRows(rows){
+ if(rows.length<2)return[];
+ let head=rows[0].map(norm), out=[];
+ const findCols=(patterns)=>head.map((h,i)=>patterns.some(p=>h.includes(p))?i:-1).filter(i=>i>=0);
+ const dateCol=head.findIndex(h=>h.includes("date"));
+ let ball=findCols(["boule","numero 1","numero1","num1"]);
+ let star=findCols(["etoile","etoile 1","star"]);
+ // If headers are not descriptive, use numeric fallback.
+ for(let r=1;r<rows.length;r++){
+   const row=rows[r]; let date=dateCol>=0?row[dateCol]:row[0];
+   let nums=[];
+   if(ball.length>=5) nums=ball.slice(0,5).map(i=>Number(String(row[i]).replace(",", "."))).filter(x=>x>=1&&x<=50);
+   let stars=[];
+   if(star.length>=2) stars=star.slice(0,2).map(i=>Number(String(row[i]).replace(",", "."))).filter(x=>x>=1&&x<=12);
+   if(nums.length<5||stars.length<2){
+     const values=row.map(v=>Number(String(v).replace(",", "."))).filter(Number.isFinite);
+     const five=values.filter(x=>x>=1&&x<=50);
+     // Take first five unique 1..50; then look for two later 1..12 values.
+     nums=[...new Set(five)].slice(0,5);
+     const rest=values.slice(5).filter(x=>x>=1&&x<=12);
+     stars=[...new Set(rest)].slice(0,2);
+   }
+   nums=[...new Set(nums)].sort((a,b)=>a-b);stars=[...new Set(stars)].sort((a,b)=>a-b);
+   if(nums.length===5&&stars.length===2){
+     const key=`${date}|${nums.join("-")}|${stars.join("-")}`;
+     out.push({date,n:nums,s:stars,key});
+   }
+ }
+ return out;
+}
+function updateState(){
+ $("mDraws").textContent=state.draws.length;
+ $("mYears").textContent=state.draws.length?`${state.draws[0].date} → ${state.draws.at(-1).date}`:"—";
+ $("dataState").textContent=state.draws.length?`${state.draws.length} tirages chargés`:"Aucun fichier chargé";
+ $("dataState").className="pill "+(state.draws.length?"good":"neutral");
+}
+function freq(ds,max=50){const f=Array(max+1).fill(0);ds.forEach(d=>d.n.forEach(x=>f[x]++));return f}
+function recentScore(ds,x){let score=0;const a=ds.slice(-80);a.forEach((d,i)=>{if(d.n.includes(x))score+=Math.exp(-(a.length-i)/20)});return score}
+function structure(a){const sum=a.reduce((x,y)=>x+y,0),ev=a.filter(x=>x%2===0).length,tens=new Set(a.map(x=>Math.floor((x-1)/10))).size,gaps=a.slice(1).map((x,i)=>x-a[i]);const gap=gaps.reduce((q,g)=>q+Math.min(g,10),0)/40,cen=1-Math.min(1,Math.abs(sum-127.5)/127.5),par=1-Math.abs(ev-2.5)/2.5;return .35*cen+.25*par+.2*(tens/5)+.2*gap}
+function modelScore(a,ds,kind){const f=freq(ds),mx=Math.max(...f)||1,fs=a.reduce((q,x)=>q+f[x]/mx,0)/5,rs=a.reduce((q,x)=>q+recentScore(ds,x),0)/5,rmax=Math.max(...Array.from({length:50},(_,i)=>recentScore(ds,i+1)))||1,rec=rs/rmax,st=structure(a);if(kind==="frequency")return fs;if(kind==="recency")return rec;if(kind==="structure")return st;if(kind==="anti")return .5*(1-st)+.5*(1-fs);if(kind==="random")return Math.random();return .42*fs+.28*rec+.30*st}
+function grid(){const a=[];while(a.length<5){const x=1+Math.floor(Math.random()*50);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)}
+function stars(){const a=[];while(a.length<2){const x=1+Math.floor(Math.random()*12);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)}
+function hits(a,b){return a.filter(x=>b.includes(x)).length}
+$("generate").onclick=()=>{if(state.draws.length<50){$("gridOut").innerHTML="Charge au moins 50 tirages.";return}const w=Math.min(+$("window").value||500,state.draws.length),ds=state.draws.slice(-w),kind=$("strategy").value,count=Math.min(20,Math.max(1,+$("count").value||8)),pool=[];for(let i=0;i<100000;i++){const n=grid(),s=stars();pool.push({n,s,v:modelScore(n,ds,kind)})}pool.sort((a,b)=>b.v-a.v);const chosen=[];for(const g of pool){if(chosen.length>=count)break;if(!chosen.some(h=>hits(g.n,h.n)>=3))chosen.push(g)}$("gridOut").className="grids";$("gridOut").innerHTML=chosen.map((g,i)=>`<div class="ticket"><div class="ticket-top"><b>Grille ${i+1}</b><span class="score">${(g.v*100).toFixed(1)}/100</span></div><div class="balls">${g.n.map(x=>`<span class="ball">${x}</span>`).join("")}${g.s.map(x=>`<span class="ball star">${x}</span>`).join("")}</div><div class="tags"><span>somme ${g.n.reduce((a,b)=>a+b,0)}</span><span>${g.n.filter(x=>x%2===0).length} pairs</span><span>${new Set(g.n.map(x=>Math.floor((x-1)/10))).size}/5 dizaines</span></div></div>`).join("")};
+$("bt").onclick=()=>{if(state.draws.length<150){$("backOut").innerHTML="Charge au moins 150 tirages.";return}const names=[["frequency","Fréquence"],["recency","Récence"],["structure","Structure"],["anti","Diversification"],["ensemble","Ensemble"]],rows=[];for(const [kind,label] of names){let total=0,n=0;for(let cut=80;cut<state.draws.length-20;cut+=20){const train=state.draws.slice(0,cut),test=state.draws.slice(cut,cut+20);for(const d of test){const candidates=[];for(let k=0;k<600;k++){const a=grid();candidates.push({a,v:modelScore(a,train,kind)})}candidates.sort((a,b)=>b.v-a.v);total+=hits(candidates[0].a,d.n);n++}}rows.push({label,total:(total/n).toFixed(3)})}rows.sort((a,b)=>b.total-a.total);$("backOut").innerHTML=`<table class="table"><tr><th>Modèle</th><th>Moyenne de numéros retrouvés / 5</th></tr>${rows.map((r,i)=>`<tr><td>${r.label}</td><td class="${i===0?'good':''}">${r.total}</td></tr>`).join("")}</table><p class="tiny">Le meilleur modèle historique n'est pas nécessairement prédictif du prochain tirage.</p>`};
+</script></body></html>
