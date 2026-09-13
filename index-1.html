@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="EuroMillions Lab V2 — analyse statistique locale des archives FDJ">
+<title>EuroMillions Lab V2</title>
+<style>
+:root{--bg:#07101a;--panel:#0d1b2a;--panel2:#102438;--text:#eef5fb;--muted:#9eb0c2;--accent:#55d6be;--accent2:#79a7ff;--danger:#ff7b7b;--line:#20364b}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#06101a,#091522);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.top{position:sticky;top:0;z-index:5;background:#07101aee;border-bottom:1px solid var(--line);backdrop-filter:blur(10px);padding:14px 18px}
+.brand{font-size:20px;font-weight:800}.brand span{color:var(--accent)}
+main{max-width:1100px;margin:auto;padding:18px}.hero,.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px #0003}
+h1,h2,h3{margin:.2em 0 .6em}.eyebrow{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:12px}
+.note{background:#102438;border-left:4px solid var(--accent);padding:12px 14px;border-radius:10px;color:#dce9f4}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.drop{border:2px dashed #31516b;border-radius:14px;padding:18px;text-align:center;flex:1;min-width:260px}.drop.drag{border-color:var(--accent);background:#0e2532}
+input[type=file]{display:none}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:10px;padding:11px 15px;background:var(--accent);color:#062018;font-weight:800;cursor:pointer}.btn.secondary{background:#173149;color:var(--text)}.btn.danger{background:#51262d;color:#ffd9d9}
+.status{color:var(--muted);margin-top:10px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px}.big{font-size:27px;font-weight:850}.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse}th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left}th{color:#b9cbe0;font-size:12px;text-transform:uppercase}
+.pills{display:flex;flex-wrap:wrap;gap:8px}.ball,.star{width:42px;height:42px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:850;background:#173c5a;border:1px solid #326487}.star{background:#4a3b12;border-color:#81691c}
+.combo{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.score{color:var(--accent);font-weight:800}
+.small{font-size:12px}.hidden{display:none}
+progress{width:100%;height:10px}
+@media(max-width:600px){main{padding:10px}.hero,.panel{padding:14px}.big{font-size:22px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand">EuroMillions <span>Lab V2</span></div></header>
+<main>
+<section class="hero">
+<div class="eyebrow">Analyse statistique • archives FDJ</div>
+<h1>Laboratoire EuroMillions</h1>
+<p class="muted">Importe les archives ZIP FDJ, fusionne les tirages et génère des combinaisons candidates à partir de critères statistiques.</p>
+<div class="note"><b>Important :</b> aucun modèle ne peut connaître avec certitude le prochain tirage d'une loterie correctement aléatoire. Le score ci-dessous sert à comparer des combinaisons, pas à garantir un résultat.</div>
+</section>
+
+<section class="panel">
+<h2>1. Charger les archives FDJ</h2>
+<div id="drop" class="drop">
+  <p><b>Dépose ici tes archives ZIP FDJ</b></p>
+  <p class="muted">Tu peux sélectionner les 6 ZIP en une seule fois.</p>
+  <label class="btn" for="files">Choisir les fichiers</label>
+  <input id="files" type="file" accept=".zip,.csv,.txt" multiple>
+</div>
+<div class="controls" style="margin-top:10px">
+<button class="btn secondary" id="demo">Charger un exemple de test</button>
+<button class="btn danger" id="clear">Effacer les données</button>
+</div>
+<div id="status" class="status">Aucune archive chargée.</div>
+<progress id="progress" value="0" max="100" class="hidden"></progress>
+</section>
+
+<section id="dashboard" class="panel hidden">
+<h2>2. Vue d'ensemble</h2>
+<div class="grid">
+<div class="card"><div class="muted">Tirages</div><div id="nDraws" class="big">0</div></div>
+<div class="card"><div class="muted">Période</div><div id="period" class="big">—</div></div>
+<div class="card"><div class="muted">Dernier tirage</div><div id="last" class="big">—</div></div>
+<div class="card"><div class="muted">Qualité du parsing</div><div id="quality" class="big">—</div></div>
+</div>
+</section>
+
+<section id="analysis" class="panel hidden">
+<h2>3. Analyse des numéros</h2>
+<div class="grid">
+<div class="card"><h3>Fréquences</h3><div id="freq"></div></div>
+<div class="card"><h3>Retards</h3><div id="delay"></div></div>
+<div class="card"><h3>Étoiles</h3><div id="stars"></div></div>
+</div>
+</section>
+
+<section id="candidates" class="panel hidden">
+<h2>4. Générateur de combinaisons</h2>
+<p class="muted">Les candidates sont classées par un score composite : fréquence historique, retard, équilibre pair/impair, somme et diversité. Cela ne transforme pas une probabilité aléatoire en certitude.</p>
+<div class="controls">
+<button class="btn" id="generate">Générer 10 candidates</button>
+</div>
+<div id="results" style="margin-top:14px"></div>
+</section>
+
+<section id="recent" class="panel hidden">
+<h2>5. Derniers tirages détectés</h2>
+<div style="overflow:auto"><table><thead><tr><th>Date</th><th>Numéros</th><th>Étoiles</th><th>Somme</th></tr></thead><tbody id="recentBody"></tbody></table></div>
+</section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+const state={draws:[],stars:[],rawFiles:0,parsedFiles:0};
+const $=id=>document.getElementById(id);
+const num=n=>Number(String(n).replace(',','.'));
+const clean=s=>String(s??'').trim().replace(/^["']|["']$/g,'');
+function setStatus(s){$('status').textContent=s}
+function keyDate(s){
+  const x=clean(s).replace(/\\./g,'/');
+  let m=x.match(/^(\\d{1,2})[\\/\\-](\\d{1,2})[\\/\\-](\\d{4})$/);
+  if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+  m=x.match(/^(\\d{4})[\\/\\-](\\d{1,2})[\\/\\-](\\d{1,2})$/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  return null;
+}
+function splitLine(line){
+  let d= line.includes(';')?';':(line.includes('\\t')?'\\t':',');
+  return line.split(d).map(clean);
+}
+function parseText(text,source){
+  const lines=text.replace(/^\\uFEFF/,'').split(/\\r?\\n/).filter(x=>x.trim());
+  let found=[];
+  for(let i=0;i<lines.length;i++){
+    const c=splitLine(lines[i]);
+    const nums=c.map(x=>parseInt(x,10)).filter(x=>Number.isInteger(x));
+    const date=c.map(keyDate).find(Boolean);
+    const five=nums.filter(x=>x>=1&&x<=50);
+    const two=nums.filter(x=>x>=1&&x<=12);
+    // Flexible FDJ-style detection: choose first 5 valid main numbers,
+    // then the first 2 valid stars after them when possible.
+    if(date && five.length>=5){
+      const main=[]; for(const x of nums){if(x>=1&&x<=50 && !main.includes(x)){main.push(x);if(main.length===5)break}}
+      const after=nums.slice(Math.max(0,nums.findIndex(x=>x===main[4])+1));
+      const st=[]; for(const x of after){if(x>=1&&x<=12&&!st.includes(x)){st.push(x);if(st.length===2)break}}
+      if(st.length<2){
+        for(const x of nums){if(x>=1&&x<=12&&!st.includes(x)&&!main.includes(x)){st.push(x);if(st.length===2)break}}
+      }
+      if(main.length===5&&st.length===2) found.push({date,main:main.sort((a,b)=>a-b),stars:st.sort((a,b)=>a-b),source});
+    }
+  }
+  return found;
+}
+async function readFile(file){
+  if(file.name.toLowerCase().endsWith('.zip')){
+    if(!window.JSZip) throw Error('Le module ZIP ne s’est pas chargé.');
+    const z=await JSZip.loadAsync(file);
+    let all=[];
+    for(const name of Object.keys(z.files)){
+      if(z.files[name].dir)continue;
+      if(/\\.(csv|txt|xml)$/i.test(name)){
+        const t=await z.files[name].async('text');
+        all=all.concat(parseText(t,name));
+      }
+    }
+    return all;
+  }
+  return parseText(await file.text(),file.name);
+}
+function dedupe(arr){
+  const m=new Map();
+  for(const d of arr)m.set(d.date.toISOString().slice(0,10)+'|'+d.main.join('-')+'|'+d.stars.join('-'),d);
+  return [...m.values()].sort((a,b)=>a.date-b.date);
+}
+function counts(){
+  const fc=Array(51).fill(0), sc=Array(13).fill(0);
+  state.draws.forEach(d=>d.main.forEach(x=>fc[x]++));
+  state.draws.forEach(d=>d.stars.forEach(x=>sc[x]++));
+  return {fc,sc};
+}
+function topList(arr,max){
+  return arr.map((v,i)=>({v,i})).filter(x=>x.i>0).sort((a,b)=>b.v-a.v).slice(0,max);
+}
+function render(){
+  const ds=state.draws;
+  $('dashboard').classList.toggle('hidden',!ds.length);
+  $('analysis').classList.toggle('hidden',!ds.length);
+  $('candidates').classList.toggle('hidden',!ds.length);
+  $('recent').classList.toggle('hidden',!ds.length);
+  if(!ds.length)return;
+  const first=ds[0].date,last=ds.at(-1).date;
+  $('nDraws').textContent=ds.length.toLocaleString('fr-FR');
+  $('period').textContent=first.getFullYear()+'–'+last.getFullYear();
+  $('last').textContent=last.toLocaleDateString('fr-FR');
+  $('quality').textContent=Math.round((state.parsedFiles/Math.max(1,state.rawFiles))*100)+'%';
+  const {fc,sc}=counts();
+  $('freq').innerHTML=topList(fc,10).map(x=>`<div class="pills"><span class="ball">${x.i}</span><span><b>${x.v}</b> sorties<br><span class="muted small">${(x.v/ds.length*100).toFixed(1)}%</span></span></div>`).join('');
+  const lastSeen=Array(51).fill(-1);
+  ds.forEach((d,idx)=>d.main.forEach(x=>lastSeen[x]=idx));
+  $('delay').innerHTML=topList(lastSeen.map((v,i)=>v<0?ds.length:ds.length-1-v),10).map(x=>`<div class="pills"><span class="ball">${x.i}</span><span><b>${x.v}</b> tirages de retard</span></div>`).join('');
+  $('stars').innerHTML=topList(sc,12).map(x=>`<div class="pills"><span class="star">${x.i}</span><span><b>${x.v}</b> sorties</span></div>`).join('');
+  $('recentBody').innerHTML=ds.slice(-15).reverse().map(d=>`<tr><td>${d.date.toLocaleDateString('fr-FR')}</td><td>${d.main.map(x=>`<span class="ball" style="width:28px;height:28px;font-size:12px">${x}</span>`).join(' ')}</td><td>${d.stars.join(' • ')}</td><td>${d.main.reduce((a,b)=>a+b,0)}</td></tr>`).join('');
+}
+function scoreCombo(combo,stars){
+  const {fc,sc}=counts(), ds=state.draws.length;
+  const mean=ds?state.draws.reduce((s,d)=>s+d.main.reduce((a,b)=>a+b,0),0)/ds:127;
+  const sum=combo.reduce((a,b)=>a+b,0);
+  const freq=combo.reduce((s,x)=>s+fc[x],0);
+  const delays=combo.reduce((s,x)=>{
+    let idx=-1; for(let i=ds-1;i>=0;i--)if(state.draws[i].main.includes(x)){idx=i;break}
+    return s+(idx<0?ds:ds-1-idx);
+  },0);
+  const odd=combo.filter(x=>x%2).length;
+  const balance=1-Math.abs(odd-2.5)/2.5;
+  const sumFit=Math.max(0,1-Math.abs(sum-mean)/60);
+  const starFreq=stars.reduce((s,x)=>s+sc[x],0);
+  return freq/(ds||1)*0.40 + delays/(ds||1)*0.20 + balance*0.15 + sumFit*0.15 + starFreq/(2*(ds||1))*0.10;
+}
+function generate(){
+  const out=[];
+  const {sc}=counts();
+  for(let k=0;k<4000;k++){
+    const a=[]; while(a.length<5){const x=1+Math.floor(Math.random()*50);if(!a.includes(x))a.push(x)}
+    a.sort((x,y)=>x-y);
+    const s=[];while(s.length<2){const x=1+Math.floor(Math.random()*12);if(!s.includes(x))s.push(x)}s.sort((x,y)=>x-y);
+    out.push({a,s,score:scoreCombo(a,s)});
+  }
+  out.sort((a,b)=>b.score-a.score);
+  const unique=[];const seen=new Set();
+  for(const x of out){const key=x.a.join('-')+'|'+x.s.join('-');if(!seen.has(key)){seen.add(key);unique.push(x)}if(unique.length===10)break}
+  $('results').innerHTML=unique.map((x,i)=>`<div class="card" style="margin-bottom:10px"><div><b>#${i+1}</b> <span class="score">score ${(x.score*100).toFixed(2)}</span></div><div class="combo" style="margin-top:8px">${x.a.map(n=>`<span class="ball">${n}</span>`).join('')}<span class="muted">★</span>${x.s.map(n=>`<span class="star">${n}</span>`).join('')}</div></div>`).join('');
+}
+async function load(files){
+  state.rawFiles=files.length;state.parsedFiles=0;state.draws=[];
+  $('progress').classList.remove('hidden');$('progress').value=0;
+  let all=[];
+  for(let i=0;i<files.length;i++){
+    setStatus(`Lecture de ${files[i].name} (${i+1}/${files.length})…`);
+    try{const d=await readFile(files[i]);if(d.length){all=all.concat(d);state.parsedFiles++}}catch(e){console.warn(e)}
+    $('progress').value=(i+1)/files.length*100;
+  }
+  state.draws=dedupe(all);
+  setStatus(state.draws.length?`${state.draws.length.toLocaleString('fr-FR')} tirages détectés dans ${state.parsedFiles}/${state.rawFiles} fichier(s).`:'Aucun tirage reconnu. Vérifie que les ZIP contiennent des CSV/TXT avec dates, 5 numéros et 2 étoiles.');
+  render();
+}
+$('files').addEventListener('change',e=>load([...e.target.files]));
+$('drop').addEventListener('dragover',e=>{e.preventDefault();$('drop').classList.add('drag')});
+$('drop').addEventListener('dragleave',()=>$('drop').classList.remove('drag'));
+$('drop').addEventListener('drop',e=>{e.preventDefault();$('drop').classList.remove('drag');load([...e.dataTransfer.files])});
+$('clear').onclick=()=>{state.draws=[];state.rawFiles=state.parsedFiles=0;$('progress').classList.add('hidden');setStatus('Données effacées.');render();$('results').innerHTML=''};
+$('generate').onclick=generate;
+$('demo').onclick=()=>{
+  const base=new Date('2024-01-02'), arr=[];
+  for(let i=0;i<120;i++){let a=[];while(a.length<5){let x=1+Math.floor(Math.random()*50);if(!a.includes(x))a.push(x)}a.sort((x,y)=>x-y);let s=[];while(s.length<2){let x=1+Math.floor(Math.random()*12);if(!s.includes(x))s.push(x)}s.sort((x,y)=>x-y);arr.push({date:new Date(base.getTime()+i*3*86400000),main:a,stars:s,source:'démo'})}
+  state.draws=dedupe(arr);state.rawFiles=state.parsedFiles=1;setStatus('Jeu de démonstration chargé — remplace-le par les archives FDJ.');render();
+};
+</script>
+</body>
+</html>
