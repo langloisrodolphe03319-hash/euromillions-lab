@@ -103,45 +103,69 @@ function splitLine(line){
   let d= line.includes(';')?';':(line.includes('\\t')?'\\t':',');
   return line.split(d).map(clean);
 }
+function normalizeHeader(s){
+  return clean(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+}
+function parseDateCell(s){
+  const x=clean(s).replace(/\./g,'/');
+  let m=x.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+  m=x.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  m=x.match(/^(\d{8})$/);
+  if(m)return new Date(+m[1].slice(0,4),+m[1].slice(4,6)-1,+m[1].slice(6,8));
+  return null;
+}
 function parseText(text,source){
-  const lines=text.replace(/^\\uFEFF/,'').split(/\\r?\\n/).filter(x=>x.trim());
-  let found=[];
-  for(let i=0;i<lines.length;i++){
-    const c=splitLine(lines[i]);
-    const nums=c.map(x=>parseInt(x,10)).filter(x=>Number.isInteger(x));
-    const date=c.map(keyDate).find(Boolean);
-    const five=nums.filter(x=>x>=1&&x<=50);
-    const two=nums.filter(x=>x>=1&&x<=12);
-    // Flexible FDJ-style detection: choose first 5 valid main numbers,
-    // then the first 2 valid stars after them when possible.
-    if(date && five.length>=5){
-      const main=[]; for(const x of nums){if(x>=1&&x<=50 && !main.includes(x)){main.push(x);if(main.length===5)break}}
-      const after=nums.slice(Math.max(0,nums.findIndex(x=>x===main[4])+1));
-      const st=[]; for(const x of after){if(x>=1&&x<=12&&!st.includes(x)){st.push(x);if(st.length===2)break}}
-      if(st.length<2){
-        for(const x of nums){if(x>=1&&x<=12&&!st.includes(x)&&!main.includes(x)){st.push(x);if(st.length===2)break}}
+  const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(x=>x.trim());
+  if(!lines.length)return [];
+  const rows=lines.map(splitLine);
+  let headerIndex=-1, header=[];
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const h=rows[i].map(normalizeHeader);
+    const hasDate=h.some(x=>/^(date|date_de_tirage|date_tirage)$/.test(x));
+    const balls=[1,2,3,4,5].every(n=>h.some(x=>x===`boule_${n}`||x===`numero_${n}`||x===`number_${n}`));
+    const stars=[1,2].every(n=>h.some(x=>x===`etoile_${n}`||x===`star_${n}`));
+    if(hasDate && balls && stars){headerIndex=i;header=h;break}
+  }
+  const found=[];
+  if(headerIndex>=0){
+    const col=(names)=>{for(const n of names){const i=header.indexOf(n);if(i>=0)return i}return -1};
+    const dateCol=col(['date_de_tirage','date_tirage','date']);
+    const ballCols=[1,2,3,4,5].map(n=>col([`boule_${n}`,`numero_${n}`,`number_${n}`]));
+    const starCols=[1,2].map(n=>col([`etoile_${n}`,`star_${n}`]));
+    for(let i=headerIndex+1;i<rows.length;i++){
+      const c=rows[i];
+      const date=parseDateCell(c[dateCol]);
+      const main=ballCols.map(j=>parseInt(clean(c[j]),10));
+      const stars=starCols.map(j=>parseInt(clean(c[j]),10));
+      if(date && main.every(x=>Number.isInteger(x)&&x>=1&&x<=50) && new Set(main).size===5 && stars.every(x=>Number.isInteger(x)&&x>=1&&x<=12) && new Set(stars).size===2){
+        found.push({date,main:main.sort((a,b)=>a-b),stars:stars.sort((a,b)=>a-b),source});
       }
-      if(main.length===5&&st.length===2) found.push({date,main:main.sort((a,b)=>a-b),stars:st.sort((a,b)=>a-b),source});
+    }
+    return found;
+  }
+  // Fallback for older/atypical FDJ files without recognizable headers.
+  for(let i=0;i<rows.length;i++){
+    const c=rows[i];
+    const date=c.map(parseDateCell).find(Boolean);
+    if(!date)continue;
+    const dateIndex=c.findIndex(x=>parseDateCell(x));
+    const vals=c.map((x,j)=>({x:parseInt(clean(x),10),j})).filter(o=>Number.isInteger(o.x));
+    // Ignore the date cell and prefer a contiguous block of 5 numbers followed by 2 stars.
+    const candidates=vals.filter(o=>o.j!==dateIndex);
+    for(let k=0;k<=candidates.length-7;k++){
+      const main=candidates.slice(k,k+5).map(o=>o.x);
+      const stars=candidates.slice(k+5,k+7).map(o=>o.x);
+      if(main.every(x=>x>=1&&x<=50)&&new Set(main).size===5&&stars.every(x=>x>=1&&x<=12)&&new Set(stars).size===2){
+        found.push({date,main:main.sort((a,b)=>a-b),stars:stars.sort((a,b)=>a-b),source});
+        break;
+      }
     }
   }
   return found;
 }
-async function readFile(file){
-  if(file.name.toLowerCase().endsWith('.zip')){
-    if(!window.JSZip) throw Error('Le module ZIP ne s’est pas chargé.');
-    const z=await JSZip.loadAsync(file);
-    let all=[];
-    for(const name of Object.keys(z.files)){
-      if(z.files[name].dir)continue;
-      if(/\\.(csv|txt|xml)$/i.test(name)){
-        const t=await z.files[name].async('text');
-        all=all.concat(parseText(t,name));
-      }
-    }
-    return all;
-  }
-  return parseText(await file.text(),file.name);
-}
+
 function dedupe(arr){
   const m=new Map();
   for(const d of arr)m.set(d.date.toISOString().slice(0,10)+'|'+d.main.join('-')+'|'+d.stars.join('-'),d);
@@ -215,7 +239,7 @@ async function load(files){
     $('progress').value=(i+1)/files.length*100;
   }
   state.draws=dedupe(all);
-  setStatus(state.draws.length?`${state.draws.length.toLocaleString('fr-FR')} tirages détectés dans ${state.parsedFiles}/${state.rawFiles} fichier(s).`:'Aucun tirage reconnu. Vérifie que les ZIP contiennent des CSV/TXT avec dates, 5 numéros et 2 étoiles.');
+  setStatus(state.draws.length?`${state.draws.length.toLocaleString('fr-FR')} tirages détectés dans ${state.parsedFiles}/${state.rawFiles} fichier(s).`:`Aucun tirage reconnu. Le ZIP a bien été lu, mais son format CSV n'a pas été reconnu.`);
   render();
 }
 $('files').addEventListener('change',e=>load([...e.target.files]));
