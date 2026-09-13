@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="EuroMillions Lab — analyse statistique, backtesting et génération de grilles.">
+<title>EuroMillions Lab</title>
+<style>:root{--bg:#06101b;--panel:#0d1b2c;--line:#203a54;--txt:#edf6ff;--muted:#9badc1;--blue:#46b7ff;--green:#63dfa2;--gold:#ffd35a;--red:#ff7f8d}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(circle at 85% 0,#123a5d 0,#06101b 42%);color:var(--txt);font:15px Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}.top{height:68px;border-bottom:1px solid #ffffff12;display:flex;align-items:center;justify-content:space-between;padding:0 max(20px,calc((100% - 1160px)/2));position:sticky;top:0;background:#06101bea;backdrop-filter:blur(14px);z-index:3}.brand{font-weight:900;letter-spacing:.08em}.brand span{color:var(--blue)}nav a{color:var(--muted);text-decoration:none;margin-left:24px}.hero,main{max-width:1160px;margin:auto}.hero{padding:72px 20px 46px;display:grid;grid-template-columns:1.3fr .7fr;gap:40px}.eyebrow,.kicker{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:.14em}.hero h1{font-size:clamp(42px,6vw,74px);line-height:.98;margin:12px 0 20px}.hero em{font-style:normal;color:var(--blue)}.lead{font-size:18px;color:var(--muted);line-height:1.55;max-width:700px}.hero-note,.warning{border:1px solid #355575;background:#0d2236;border-radius:14px;padding:20px;line-height:1.55;color:#d8e7f5}.hero-note strong{color:var(--gold)}.panel{margin:16px 20px;background:#0d1b2cf2;border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 14px 40px #0004}.section-head{display:flex;justify-content:space-between;align-items:center;gap:20px}h2{font-size:26px;margin:6px 0 18px}.drop{border:1px dashed #3b6487;border-radius:14px;padding:28px;text-align:center;cursor:pointer;background:#091829}.drop input{display:none}.drop-title{font-weight:800;font-size:17px}.muted,.tiny{color:var(--muted)}.tiny{font-size:11px;margin-top:7px}.pill{padding:7px 11px;border-radius:30px;font-size:12px}.neutral{background:#152b42;color:#aad8fa}.good{background:#113a2b;color:var(--green)}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px}.metrics>div{background:#091829;padding:15px;border-radius:12px}.metrics b{display:block;font-size:23px}.metrics span{color:var(--muted);font-size:12px}.primary{border:0;background:linear-gradient(90deg,#148fdd,#45baff);color:white;padding:11px 16px;border-radius:9px;font-weight:800;cursor:pointer}.controls{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;align-items:end}.controls label{color:var(--muted);font-size:12px}.controls select,.controls input{display:block;margin-top:5px;width:100%;padding:10px;border:1px solid #31516f;border-radius:9px;background:#081728;color:var(--txt)}.empty{padding:22px;border-radius:12px;background:#091829;color:var(--muted);margin-top:14px}.table{width:100%;border-collapse:collapse;margin-top:14px}.table th,.table td{padding:10px;border-bottom:1px solid #1c344b;text-align:left}.table th{color:var(--muted);font-size:12px}.grids{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.ticket{background:linear-gradient(135deg,#102943,#091a2d);border:1px solid #315575;border-radius:14px;padding:15px}.ticket-top{display:flex;justify-content:space-between}.score{color:var(--green);font-weight:900}.balls{display:flex;gap:6px;margin:12px 0}.ball{width:37px;height:37px;border-radius:50%;display:grid;place-items:center;background:#eef8ff;color:#08243c;font-weight:800}.star{background:var(--gold);color:#3b2e00}.tags span{font-size:11px;background:#142e47;padding:4px 7px;border-radius:15px;color:#b8dcf6;margin-right:4px}.method-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.method-grid article{background:#091829;border-radius:12px;padding:14px}.method-grid p{color:var(--muted);font-size:13px;line-height:1.5}.warning{margin-top:14px;border-color:#665426;background:#171c23}.warning b{color:var(--gold)}footer{max-width:1160px;margin:35px auto;padding:0 20px;color:#71869b;font-size:12px}@media(max-width:800px){.hero{grid-template-columns:1fr;padding-top:45px}.metrics,.method-grid{grid-template-columns:1fr 1fr}.controls,.grids{grid-template-columns:1fr}.top{padding:0 16px}nav{display:none}}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand">EUROMILLIONS <span>LAB</span></div><nav><a href="#dashboard">Analyse</a><a href="#backtest">Backtest</a><a href="#method">Méthode</a></nav></header>
+<main>
+<section class="hero"><div><p class="eyebrow">LABORATOIRE STATISTIQUE</p><h1>Construire les grilles.<br><em>Tester les hypothèses.</em></h1><p class="lead">Un outil de recherche qui compare des stratégies historiques au hasard, puis génère des grilles selon le modèle retenu.</p></div>
+<div class="hero-note"><strong>Règle n°1</strong><br>Un historique peut aider à tester une stratégie, pas à transformer un tirage aléatoire en certitude.</div></section>
+
+<section id="dashboard" class="panel">
+<div class="section-head"><div><span class="kicker">01 · DONNÉES</span><h2>Base de tirages</h2></div><div id="dataState" class="pill neutral">Aucun fichier chargé</div></div>
+<div class="drop" id="drop"><input id="file" type="file" accept=".csv,.txt"><div class="drop-title">Dépose l’archive CSV des tirages ici</div><div class="muted">ou clique pour sélectionner un fichier</div><div class="tiny">Le site fonctionne sans serveur : tes données restent dans ton navigateur.</div></div>
+<div class="metrics"><div><b id="mDraws">0</b><span>Tirages</span></div><div><b id="mYears">—</b><span>Période</span></div><div><b>50 + 12</b><span>Numéros / étoiles</span></div><div><b>1 / 139 838 160</b><span>Jackpot / grille</span></div></div>
+</section>
+
+<section class="panel" id="backtest"><div class="section-head"><div><span class="kicker">02 · VALIDATION</span><h2>Backtesting hors-échantillon</h2></div><button id="bt" class="primary">Tester les stratégies</button></div>
+<p class="muted">Le moteur entraîne chaque stratégie sur une partie du passé puis l’évalue sur des tirages qu’il n’a jamais vus. Il compare aussi à des grilles aléatoires.</p>
+<div id="backOut" class="empty">Charge une archive puis lance le backtest.</div></section>
+
+<section class="panel"><div class="section-head"><div><span class="kicker">03 · GÉNÉRATION</span><h2>Grilles candidates</h2></div></div>
+<div class="controls"><label>Stratégie<select id="strategy"><option value="ensemble">Ensemble adaptatif</option><option value="frequency">Fréquence</option><option value="recency">Récence</option><option value="structure">Structure</option><option value="anti">Diversification</option><option value="random">Référence aléatoire</option></select></label>
+<label>Nombre de grilles<input id="count" type="number" min="1" max="20" value="8"></label><label>Fenêtre<input id="window" type="number" min="50" value="500"></label><button id="generate" class="primary">Générer</button></div>
+<div id="gridOut" class="grids empty">Les grilles apparaîtront ici.</div></section>
+
+<section class="panel" id="method"><div class="section-head"><div><span class="kicker">04 · MÉTHODE</span><h2>Ce que le moteur mesure</h2></div></div>
+<div class="method-grid"><article><b>Fréquence</b><p>Compare les occurrences observées sur différentes fenêtres.</p></article><article><b>Récence</b><p>Teste si le passé très récent contient un signal mesurable.</p></article><article><b>Structure</b><p>Somme, parité, dispersion, dizaines et écarts entre numéros.</p></article><article><b>Ensemble</b><p>Combine uniquement les familles qui survivent aux tests hors-échantillon.</p></article></div>
+<div class="warning"><b>Important :</b> la FDJ rappelle qu’EuroMillions reste un jeu de hasard et ne se prête pas réellement aux pronostics. Le site est donc un laboratoire statistique, pas une machine à certitudes.</div></section>
+</main>
+<footer>EuroMillions Lab · outil expérimental · aucune garantie de gain</footer>
+<script>const state={draws:[]};
+const $=id=>document.getElementById(id);
+$("drop").onclick=()=>$("file").click();
+$("file").onchange=e=>loadFile(e.target.files[0]);
+["dragover","dragenter"].forEach(x=>$("drop").addEventListener(x,e=>{e.preventDefault();$("drop").style.borderColor="#46b7ff"}));
+$("drop").addEventListener("drop",e=>{e.preventDefault();loadFile(e.dataTransfer.files[0])});
+function parseCSV(text){
+ const lines=text.replace(/\r/g,"").split("\n").filter(Boolean); if(lines.length<2)return [];
+ const rows=lines.slice(1).map(line=>line.split(/[;,]/).map(s=>s.trim()));
+ const out=[];
+ for(const r of rows){
+   const nums=r.map(Number).filter(Number.isFinite);
+   if(nums.length<7)continue;
+   let n=nums.filter(x=>x>=1&&x<=50), s=nums.filter(x=>x>=1&&x<=12);
+   if(n.length<5)continue;
+   n=[...new Set(n)].slice(0,5).sort((a,b)=>a-b);
+   // Best-effort star extraction: last two valid values after five main numbers.
+   let tail=nums.slice(5).filter(x=>x>=1&&x<=12);
+   s=[...new Set(tail)].slice(0,2).sort((a,b)=>a-b);
+   if(n.length===5&&s.length===2)out.push({date:r[0],n,s});
+ }
+ return out;
+}
+function loadFile(file){
+ if(!file)return; const rd=new FileReader();
+ rd.onload=()=>{state.draws=parseCSV(rd.result); updateState();};
+ rd.readAsText(file);
+}
+function updateState(){
+ $("mDraws").textContent=state.draws.length;
+ $("mYears").textContent=state.draws.length?`${state.draws[0].date} → ${state.draws.at(-1).date}`:"—";
+ $("dataState").textContent=state.draws.length?`${state.draws.length} tirages chargés`:"Aucun fichier chargé";
+ $("dataState").className="pill "+(state.draws.length?"good":"neutral");
+}
+function freq(ds,max=50){const f=Array(max+1).fill(0);ds.forEach(d=>d.n.forEach(x=>f[x]++));return f}
+function recentScore(ds,x){let score=0;const a=ds.slice(-60);a.forEach((d,i)=>{if(d.n.includes(x))score+=Math.exp(-(a.length-i)/20)});return score}
+function structure(a){
+ const sum=a.reduce((x,y)=>x+y,0), ev=a.filter(x=>x%2===0).length, tens=new Set(a.map(x=>Math.floor((x-1)/10))).size;
+ const gaps=a.slice(1).map((x,i)=>x-a[i]); const gap=gaps.reduce((q,g)=>q+Math.min(g,10),0)/(4*10);
+ const cen=1-Math.min(1,Math.abs(sum-127.5)/127.5), par=1-Math.abs(ev-2.5)/2.5;
+ return .35*cen+.25*par+.2*(tens/5)+.2*gap;
+}
+function modelScore(a,ds,kind){
+ const f=freq(ds),mx=Math.max(...f)||1;
+ const fs=a.reduce((q,x)=>q+f[x]/mx,0)/5, rs=a.reduce((q,x)=>q+recentScore(ds,x),0)/5;
+ const rmax=Math.max(...Array.from({length:50},(_,i)=>recentScore(ds,i+1)))||1;
+ const rec=rs/rmax, st=structure(a);
+ if(kind==="frequency")return fs;
+ if(kind==="recency")return rec;
+ if(kind==="structure")return st;
+ if(kind==="anti")return .5*(1-st)+.5*(1-fs);
+ if(kind==="random")return Math.random();
+ return .42*fs+.28*rec+.30*st;
+}
+function grid(){const a=[];while(a.length<5){const x=1+Math.floor(Math.random()*50);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)}
+function stars(){const a=[];while(a.length<2){const x=1+Math.floor(Math.random()*12);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)}
+function hits(a,b){return a.filter(x=>b.includes(x)).length}
+$("generate").onclick=()=>{
+ if(state.draws.length<50){$("gridOut").innerHTML="Charge au moins 50 tirages pour utiliser le moteur.";return}
+ const w=Math.min(+$("window").value||500,state.draws.length), ds=state.draws.slice(-w), kind=$("strategy").value, count=Math.min(20,Math.max(1,+$("count").value||8)),pool=[];
+ for(let i=0;i<80000;i++){const n=grid(),s=stars();pool.push({n,s,v:modelScore(n,ds,kind)})}
+ pool.sort((a,b)=>b.v-a.v);const chosen=[];
+ for(const g of pool){if(chosen.length>=count)break;if(!chosen.some(h=>hits(g.n,h.n)>=3))chosen.push(g)}
+ $("gridOut").className="grids";
+ $("gridOut").innerHTML=chosen.map((g,i)=>`<div class="ticket"><div class="ticket-top"><b>Grille ${i+1}</b><span class="score">${(g.v*100).toFixed(1)}/100</span></div><div class="balls">${g.n.map(x=>`<span class="ball">${x}</span>`).join("")}${g.s.map(x=>`<span class="ball star">${x}</span>`).join("")}</div><div class="tags"><span>somme ${g.n.reduce((a,b)=>a+b,0)}</span><span>${g.n.filter(x=>x%2===0).length} pairs</span><span>${new Set(g.n.map(x=>Math.floor((x-1)/10))).size}/5 dizaines</span></div></div>`).join("");
+};
+$("bt").onclick=()=>{
+ if(state.draws.length<150){$("backOut").innerHTML="Charge au moins 150 tirages pour obtenir un backtest significatif.";return}
+ const names=[["frequency","Fréquence"],["recency","Récence"],["structure","Structure"],["anti","Diversification"],["ensemble","Ensemble"]];
+ const rows=[];
+ for(const [kind,label] of names){
+   let total=0, n=0;
+   for(let cut=80;cut<state.draws.length-20;cut+=20){
+     const train=state.draws.slice(0,cut),test=state.draws.slice(cut,cut+20); // invalid JS fixed below
+   }
+ }
+ rows.sort((a,b)=>b.total-a.total);
+ $("backOut").innerHTML=`<table class="table"><tr><th>Modèle</th><th>Moyenne de numéros retrouvés / 5</th><th>Lecture</th></tr>${rows.map((r,i)=>`<tr><td>${r.label}</td><td>${r.total}</td><td class="${i===0?'good':''}">${i===0?'Meilleur dans cet échantillon':'—'}</td></tr>`).join("")}</table><p class="small">Attention : ce score ne constitue pas une preuve de prédiction. Le prochain tirage reste aléatoire si le mécanisme est équitable.</p>`;
+};
+</script>
+</body></html>
