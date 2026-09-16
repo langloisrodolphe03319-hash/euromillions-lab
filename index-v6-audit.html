@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="EuroMillions Lab — V3.2 validation statistique renforcée">
+<title>EuroMillions Lab — V6 audit prospectif</title>
+<style>
+:root{--bg:#06101b;--panel:#0d1b2c;--line:#203a54;--txt:#edf6ff;--muted:#9badc1;--blue:#46b7ff;--green:#63dfa2;--gold:#ffd35a;--red:#ff7f8d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#123a5d,#06101b 42%);color:var(--txt);font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{height:68px;border-bottom:1px solid #ffffff12;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;background:#06101bea;backdrop-filter:blur(14px);z-index:3}
+.brand{font-weight:900;letter-spacing:.08em}.brand span{color:var(--blue)}
+main{max-width:1160px;margin:auto}.hero{padding:45px 20px 28px;display:grid;grid-template-columns:1.3fr .7fr;gap:35px}.eyebrow,.kicker{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:.14em}
+h1{font-size:clamp(40px,6vw,70px);line-height:.98;margin:12px 0 18px}.hero em{font-style:normal;color:var(--blue)}.lead{font-size:18px;color:var(--muted);line-height:1.5}
+.note,.warning{border:1px solid #355575;background:#0d2236;border-radius:14px;padding:20px;line-height:1.55}.note strong,.warning b{color:var(--gold)}
+.panel{margin:16px 20px;background:#0d1b2cf2;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 14px 40px #0004}
+.head{display:flex;justify-content:space-between;align-items:center;gap:15px}h2{font-size:25px;margin:6px 0 15px}
+.pill{padding:7px 11px;border-radius:30px;font-size:12px}.neutral{background:#152b42;color:#aad8fa}.good{background:#113a2b;color:var(--green)}
+.primary,.secondary{padding:11px 15px;border-radius:9px;font-weight:800;cursor:pointer}.primary{border:0;background:linear-gradient(90deg,#148fdd,#45baff);color:white}.secondary{border:1px solid #31516f;background:#081728;color:var(--txt)}
+.primary:disabled{opacity:.55}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:12px}.metrics>div{background:#091829;padding:14px;border-radius:12px}.metrics b{display:block;font-size:22px}.metrics span,.muted,.tiny{color:var(--muted)}.tiny{font-size:11px}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end}.controls label{font-size:12px;color:var(--muted)}select,input{display:block;margin-top:5px;width:100%;padding:10px;border:1px solid #31516f;border-radius:9px;background:#081728;color:var(--txt)}
+.drop{border:1px dashed #3b6487;border-radius:14px;padding:25px;text-align:center;background:#091829;cursor:pointer}.drop input{display:none}
+.progress{margin-top:14px}.bar{height:9px;background:#091829;border-radius:9px;overflow:hidden}.bar>div{height:100%;width:0;background:linear-gradient(90deg,#148fdd,#45baff);transition:width .15s}
+.table{width:100%;border-collapse:collapse;margin-top:15px}.table th,.table td{padding:9px;border-bottom:1px solid #1c344b;text-align:left}.table th{color:var(--muted);font-size:12px}
+.smalltable{font-size:12px}.warning{margin-top:14px;border-color:#665426;background:#171c23}
+@media(max-width:800px){.hero{grid-template-columns:1fr;padding-top:35px}.metrics{grid-template-columns:1fr 1fr}.controls{grid-template-columns:1fr}.panel{padding:18px}}
+.resultbox{margin-top:12px;padding:14px;border:1px solid #ddd;border-radius:12px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em}</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<header class="top"><div class="brand">EUROMILLIONS <span>LAB</span></div><span class="pill neutral">V6.0 · AUDIT PROSPECTIF</span></header>
+<section class="hero"><div><p class="eyebrow">LABORATOIRE STATISTIQUE · V6.0</p><h1>Validation <em>hors échantillon.</em></h1><p class="lead">Cette version sépare l'apprentissage historique des tirages utilisés pour évaluer les modèles. Elle cherche à mesurer la stabilité du signal, pas à optimiser un score sur les mêmes données.</p></div>
+<div class="note"><strong>Principe</strong><br>Plusieurs blocs de tirages sont réservés à la validation. Les modèles ne voient pas ces tirages avant de produire leurs grilles. Les résultats sont comparés à une référence aléatoire et à l'espérance théorique.</div></section>
+<main>
+<section class="panel"><div class="head"><div><span class="kicker">01 · DONNÉES</span><h2>Archives FDJ</h2></div><div id="state" class="pill neutral">Aucune archive</div></div>
+<div class="drop" id="drop"><input id="files" type="file" accept=".zip,.csv,.txt,.xlsx,.xls" multiple><button id="auto" class="primary">⚡ Charger automatiquement les archives FDJ</button><div style="margin-top:10px;font-weight:800">Dépose les archives ZIP FDJ ici</div><div class="muted">ou sélectionne une ou plusieurs archives</div><div id="msg" class="tiny"></div><div id="errors" class="tiny" style="margin-top:8px;color:var(--red)"></div></div>
+<div class="metrics"><div><b id="draws">0</b><span>Tirages</span></div><div><b id="period">—</b><span>Période</span></div><div><b>0,500</b><span>Espérance numéros</span></div><div><b>0,333</b><span>Espérance étoiles</span></div></div></section>
+
+<section class="panel"><div class="head"><div><span class="kicker">02 · VALIDATION</span><h2>Protocole temporel figé</h2></div><div><button id="run" class="primary">Lancer la validation</button> <button id="stop" class="secondary" hidden>Arrêter</button></div></div>
+<p class="muted">Les validations utilisent plusieurs blocs temporels. Le modèle est ajusté uniquement avec les tirages antérieurs à chaque bloc. Les moyennes, écarts-types et intervalles de confiance sont calculés sur les tirages réellement réservés au test.</p>
+<div class="controls">
+<label>Blocs de validation<input id="folds" type="number" value="18" readonly></label>
+<label>Tirages par bloc<input id="block" type="number" value="30" readonly></label>
+<label>Candidats / tirage<input id="cand" type="number" value="400" readonly></label>
+<label>Minimum apprentissage<input id="mintrain" type="number" value="300" readonly></label><label>Holdout final<input id="holdout" type="number" value="180" readonly></label>
+</div>
+<div class="progress" id="prog" hidden><div id="ptext" class="tiny">Préparation…</div><div class="bar"><div id="pbar"></div></div></div>
+<p class="tiny"><strong>Important :</strong> le holdout final est verrouillé pour cette version, mais il ne peut pas être présenté comme une donnée jamais consultée : les versions précédentes ont déjà utilisé l’ensemble de l’historique 2013–2024. Il sert donc de contrôle temporel supplémentaire, pas de test aveugle définitif.</p>
+<p class="tiny"><strong>Audit V5 : comparaison appariée sur le holdout, bootstrap 2 000 réplications, permutation 5 000 réplications, correction de Holm sur 10 comparaisons. Protocole figé V4 : 18 blocs temporels × 30 tirages, 400 candidats/tirage, 300 tirages minimum d’apprentissage, holdout final de 180 tirages, 20 références aléatoires indépendantes et 5 000 permutations.</strong> 18 blocs temporels × 30 tirages, 400 candidats/tirage, 300 tirages minimum d’apprentissage, 20 références aléatoires indépendantes par test et 5 000 permutations.</p>
+
+<section class="card" id="prospective">
+  <div class="eyebrow">04 · PROSPECTIF</div>
+  <h2>Prédiction figée du prochain tirage</h2>
+  <p class="tiny">
+    V5 sépare la recherche historique du suivi prospectif. Une prédiction est enregistrée
+    avec l'horodatage et l'historique disponible au moment de sa création. Elle ne doit
+    jamais être recalculée après connaissance du tirage réel.
+  </p>
+  <div class="grid2">
+    <button id="makePrediction">Créer la prédiction suivante</button>
+    <button id="recordDraw" disabled>Enregistrer le tirage réel</button>
+  </div>
+  <div id="predOut" class="resultbox">
+    <p class="tiny">Aucune prédiction prospective enregistrée.</p>
+  </div>
+  <div class="tiny">
+    <strong>Règle :</strong> après création, ne modifie pas les paramètres et ne recrée pas
+    une prédiction pour le même tirage. Le suivi doit conserver la première prédiction.
+  </div>
+</section>
+
+<div id="out" class="note" style="margin-top:14px">Charge les archives puis lance la validation.</div>
+</section>
+
+<section class="panel"><div class="head"><div><span class="kicker">03 · LECTURE</span><h2>Lecture du protocole</h2></div></div>
+<div class="warning"><b>Important :</b> un écart positif sur un historique ne prouve pas une capacité à prévoir le prochain tirage. La comparaison hors échantillon réduit le risque de surapprentissage, mais ne transforme pas un jeu aléatoire en système prédictif.</div>
+<table class="table smalltable"><tr><th>Mesure</th><th>Ce qu'elle indique</th></tr>
+<tr><td>Moyenne</td><td>Nombre moyen de numéros ou étoiles retrouvés par grille.</td></tr>
+<tr><td>Écart-type</td><td>Variabilité des résultats d'un tirage à l'autre.</td></tr>
+<tr><td>IC 95 %</td><td>Fourchette d'incertitude autour de la moyenne observée, sous approximation normale.</td></tr>
+<tr><td>Stabilité</td><td>Variation de la moyenne entre les différents blocs temporels.</td></tr>
+</table></section>
+</main>
+<script>
+const state={draws:[]},$=id=>document.getElementById(id);
+const FDJ=[
+"https://www.sto.api.fdj.fr/anonymous/service-draw-info/v3/documentations/1a2b3c4d-9876-4562-b3fc-2c963f66afe6",
+"https://www.sto.api.fdj.fr/anonymous/service-draw-info/v3/documentations/1a2b3c4d-9876-4562-b3fc-2c963f66afd6",
+"https://www.sto.api.fdj.fr/anonymous/service-draw-info/v3/documentations/1a2b3c4d-9876-4562-b3fc-2c963f66afc6",
+"https://www.sto.api.fdj.fr/anonymous/service-draw-info/v3/documentations/1a2b3c4d-9876-4562-b3fc-2c963f66afb6",
+"https://www.sto.api.fdj.fr/anonymous/service-draw-info/v3/documentations/1a2b3c4d-9876-4562-b3fc-2c963f66afa9",
+"https://www.sto.api.fdj.fr/anonymous/service-draw-info/v3/documentations/1a2b3c4d-9876-4562-b3fc-2c963f66afa8"];
+function norm(s){return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"")}
+function parseRows(rows){if(rows.length<2)return[];const h=rows[0].map(norm),out=[];const find=ns=>ns.map(norm).map(x=>h.indexOf(x)).find(i=>i>=0)??-1;const dc=find(["date","date_tirage","date_de_tirage"]),bc=[1,2,3,4,5].map(n=>find([`boule_${n}`,`boule${n}`,`numero_${n}`,`numero${n}`,`num_${n}`,`num${n}`])),sc=[1,2].map(n=>find([`etoile_${n}`,`etoile${n}`,`star_${n}`,`star${n}`]));
+for(let r=1;r<rows.length;r++){const row=rows[r],date=dc>=0?row[dc]:row[0];let n=bc.every(i=>i>=0)?bc.map(i=>+String(row[i]).replace(",",".")):[],s=sc.every(i=>i>=0)?sc.map(i=>+String(row[i]).replace(",",".")):[];if(n.length<5||s.length<2){const v=row.map(x=>+String(x).replace(",","." )).filter(Number.isFinite),u=[...new Set(v)];n=u.filter(x=>x>=1&&x<=50).slice(0,5);s=u.filter(x=>x>=1&&x<=12).slice(5,7)}n=[...new Set(n)].filter(x=>x>=1&&x<=50).sort((a,b)=>a-b);s=[...new Set(s)].filter(x=>x>=1&&x<=12).sort((a,b)=>a-b);if(n.length===5&&s.length===2&&date)out.push({date:String(date).trim(),n,s,key:String(date)+"|"+n.join("-")+"|"+s.join("-")})}return out}
+function splitCSV(line,sep){
+  const out=[];let cur="",q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){
+      if(q&&line[i+1]==='"'){cur+='"';i++}else q=!q
+    }else if(c===sep&&!q){out.push(cur.trim());cur=""}
+    else cur+=c
+  }
+  out.push(cur.trim());
+  return out.map(s=>s.replace(/^"|"$/g,""))
+}
+function parseText(t){
+  const lines=t.replace(/^\uFEFF/,"").replace(/\r/g,"").split("\n").filter(x=>x.trim());
+  if(!lines.length)return[];
+  const sample=lines.slice(0,5).join("\n");
+  const counts=[",",";","\t"].map(sep=>[sep,(sample.match(new RegExp("\\"+sep,"g"))||[]).length]);
+  const sep=counts.sort((a,b)=>b[1]-a[1])[0][0];
+  return parseRows(lines.map(x=>splitCSV(x,sep)))
+}
+function parseWB(bytes){
+  const wb=XLSX.read(bytes,{type:"array",cellDates:true}),o=[];
+  for(const s of wb.SheetNames)
+    o.push(...parseRows(XLSX.utils.sheet_to_json(wb.Sheets[s],{header:1,raw:false,defval:""})));
+  return o
+}
+async function zip(buf){
+  const z=await JSZip.loadAsync(buf),o=[];
+  const entries=Object.values(z.files).filter(e=>!e.dir);
+  const dataEntries=entries.filter(e=>/\.(csv|txt|xlsx|xls)$/i.test(e.name));
+  if(!dataEntries.length)throw new Error("Aucune donnée CSV/Excel trouvée dans l'archive");
+  for(const e of dataEntries){
+    const b=await e.async("uint8array");
+    try{
+      if(/\.(xlsx|xls)$/i.test(e.name))o.push(...parseWB(b));
+      else{
+        let text;
+        try{text=new TextDecoder("utf-8",{fatal:true}).decode(b)}
+        catch(err){text=new TextDecoder("windows-1252").decode(b)}
+        o.push(...parseText(text))
+      }
+    }catch(err){console.warn("Entrée ignorée",e.name,err)}
+  }
+  return o
+}
+function merge(a){const m=new Map();for(const d of a)m.set(d.key,d);state.draws=[...m.values()].sort((a,b)=>a.date.localeCompare(b.date));$("draws").textContent=state.draws.length;$("period").textContent=state.draws.length?state.draws[0].date+" → "+state.draws.at(-1).date:"—";$("state").textContent=state.draws.length+" tirages chargés";$("state").className="pill "+(state.draws.length?"good":"neutral")}
+async function loadFiles(fs){
+  const a=[]; $("errors").textContent="";
+  if(!fs.length)return;
+  for(const f of fs){
+    try{
+      const rows=f.name.toLowerCase().endsWith(".zip")?await zip(await f.arrayBuffer()):
+        /\.(xlsx|xls)$/i.test(f.name)?parseWB(new Uint8Array(await f.arrayBuffer())):parseText(await f.text());
+      a.push(...rows);
+    }catch(e){$("errors").textContent+="⚠️ "+f.name+" : "+(e.message||String(e))+"<br>"}
+  }
+  merge(a);
+  $("msg").textContent=`${fs.length} fichier(s) traité(s) · ${state.draws.length} tirages reconnus.`;
+}
+async function fetchWithTimeout(u,ms=20000){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
+  try{return await fetch(u,{mode:"cors",cache:"no-store",signal:c.signal})}
+  finally{clearTimeout(t)}
+}
+async function loadFDJ(){
+  $("auto").disabled=true;
+  $("msg").textContent="Téléchargement des archives…";
+  $("errors").textContent="";
+  const a=[]; let ok=0; const errors=[];
+  for(let i=0;i<FDJ.length;i++){
+    const u=FDJ[i];
+    let done=false,last="";
+    for(let attempt=1;attempt<=2&&!done;attempt++){
+      try{
+        const r=await fetchWithTimeout(u,20000);
+        if(!r.ok) throw Error("HTTP "+r.status);
+        const b=await r.arrayBuffer();
+        const rows=await zip(b);
+        if(!rows.length) throw Error("archive reçue mais aucun tirage reconnu");
+        a.push(...rows); ok++; done=true;
+        $("msg").textContent=`Archive ${i+1}/6 chargée · ${ok}/6 réussies…`;
+      }catch(e){
+        last=e.name==="AbortError"?"délai dépassé":(e.message||String(e));
+        await new Promise(r=>setTimeout(r,500));
+      }
+    }
+    if(!done) errors.push(`Archive ${i+1}: ${last}`);
+  }
+  merge(a);
+  $("msg").textContent=`${ok}/6 archives chargées · ${state.draws.length} tirages reconnus.`;
+  $("errors").innerHTML=errors.length
+    ? "⚠️ "+errors.join("<br>")+"<br><b>Solution :</b> utilise la zone de sélection pour charger les ZIP manuellement."
+    : "✓ Toutes les archives ont été chargées.";
+  $("auto").disabled=false;
+}
+$("auto").onclick=e=>{e.stopPropagation();loadFDJ()};$("drop").onclick=()=>$("files").click();$("files").onchange=e=>loadFiles([...e.target.files]);$("drop").addEventListener("dragover",e=>e.preventDefault());$("drop").addEventListener("drop",e=>{e.preventDefault();loadFiles([...e.dataTransfer.files])});
+
+function structure(a){const sum=a.reduce((x,y)=>x+y,0),ev=a.filter(x=>x%2===0).length,t=new Set(a.map(x=>Math.floor((x-1)/10))).size,g=a.slice(1).map((x,i)=>x-a[i]);const gap=g.reduce((q,x)=>q+Math.min(x,10),0)/40,cen=1-Math.min(1,Math.abs(sum-127.5)/127.5),par=1-Math.abs(ev-2.5)/2.5;return .35*cen+.25*par+.2*(t/5)+.2*gap}
+function stats(ds){const f=Array(51).fill(0),r=Array(51).fill(0),sf=Array(13).fill(0),sr=Array(13).fill(0),a=ds.slice(-80),L=a.length;a.forEach((d,i)=>{const w=Math.exp(-(L-i)/20);d.n.forEach(x=>{f[x]++;r[x]+=w});d.s.forEach(x=>{sf[x]++;sr[x]+=w})});return{f,r,sf,sr,mf:Math.max(1,...f.slice(1)),mr:Math.max(1,...r.slice(1)),msf:Math.max(1,...sf.slice(1)),msr:Math.max(1,...sr.slice(1))}}
+function score(a,s,k){let f=0,r=0;for(const x of a){f+=s.f[x]/s.mf;r+=s.r[x]/s.mr}f/=5;r/=5;const st=structure(a);return k==="frequency"?f:k==="recency"?r:k==="structure"?st:k==="anti"?.5*(1-st)+.5*(1-f):.42*f+.28*r+.30*st}
+function rng(seed){let x=seed>>>0;return()=>{x=(1664525*x+1013904223)>>>0;return x/4294967296}}
+function grid(r){const a=[];while(a.length<5){const x=1+Math.floor(r()*50);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)}
+function stars(r){const a=[];while(a.length<2){const x=1+Math.floor(r()*12);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)}
+function best(train,k,seed,candidates){const r=rng(seed),s=stats(train);let bg=null;for(let i=0;i<candidates;i++){const a=grid(r),v=score(a,s,k);if(!bg||v>bg.v)bg={n:a,v}}let bs=null;for(let x=1;x<=12;x++)for(let y=x+1;y<=12;y++){const v=(s.sf[x]/s.msf+s.sf[y]/s.msf)*.55/2+(s.sr[x]/s.msr+s.sr[y]/s.msr)*.45/2;if(!bs||v>bs.v)bs={s:[x,y],v}}return{n:bg.n,s:bs.s}}
+function hits(a,b){return a.filter(x=>b.includes(x)).length}
+function summary(v){const n=v.length;if(!n)return null;const mean=v.reduce((a,b)=>a+b,0)/n,sd=Math.sqrt(v.reduce((a,b)=>a+(b-mean)**2,0)/Math.max(1,n-1)),se=sd/Math.sqrt(n);return{mean,sd,lo:mean-1.96*se,hi:mean+1.96*se}}
+let worker=null;
+$("stop").onclick=()=>{if(worker){worker.terminate();worker=null}$("run").disabled=false;$("stop").hidden=true;$("out").textContent="Calcul arrêté."}
+$("run").onclick=()=>{
+if(state.draws.length<450){$("out").textContent="Charge au moins 450 tirages.";return}
+if(worker)worker.terminate();const folds=18,block=30,cand=400,minTrain=300,holdout=180,randomRep=20,boot=2000,permRep=5000;
+$("run").disabled=true;$("stop").hidden=false;$("prog").hidden=false;$("pbar").style.width="0%";$("out").textContent="Validation en cours…";
+const src=`
+onmessage=e=>{
+  const {draws,folds,block,cand,minTrain,holdout,randomRep,boot,permRep}=e.data;
+  const models=[
+    ["frequency","Fréquence"],
+    ["recency","Récence"],
+    ["structure","Structure"],
+    ["anti","Diversification"],
+    ["ensemble","Ensemble"],
+    ["random","Aléatoire"]
+  ];
+  const R={};
+  models.forEach(m=>R[m[0]]={label:m[1],num:[],star:[],fold:[]});
+
+  function structure(a){
+    const sum=a.reduce((x,y)=>x+y,0);
+    const ev=a.filter(x=>x%2===0).length;
+    const t=new Set(a.map(x=>Math.floor((x-1)/10))).size;
+    const g=a.slice(1).map((x,i)=>x-a[i]);
+    const gap=g.reduce((q,x)=>q+Math.min(x,10),0)/40;
+    const cen=1-Math.min(1,Math.abs(sum-127.5)/127.5);
+    const par=1-Math.abs(ev-2.5)/2.5;
+    return .35*cen+.25*par+.2*(t/5)+.2*gap;
+  }
+
+  function stats(ds){
+    const f=Array(51).fill(0),r=Array(51).fill(0),
+          sf=Array(13).fill(0),sr=Array(13).fill(0);
+    const a=ds.slice(-80),L=a.length;
+    a.forEach((d,i)=>{
+      const w=Math.exp(-(L-i)/20);
+      d.n.forEach(x=>{f[x]++;r[x]+=w});
+      d.s.forEach(x=>{sf[x]++;sr[x]+=w});
+    });
+    return {
+      f,r,sf,sr,
+      mf:Math.max(1,...f.slice(1)),mr:Math.max(1,...r.slice(1)),
+      msf:Math.max(1,...sf.slice(1)),msr:Math.max(1,...sr.slice(1))
+    };
+  }
+
+  function score(a,s,k){
+    let f=0,r=0;
+    for(const x of a){f+=s.f[x]/s.mf;r+=s.r[x]/s.mr}
+    f/=5;r/=5;
+    const q=structure(a);
+    return k==="frequency"?f:
+      k==="recency"?r:
+      k==="structure"?q:
+      k==="anti"?.5*(1-q)+.5*(1-f):
+      .42*f+.28*r+.30*q;
+  }
+
+  function starStructure(a){
+    const spread=Math.abs(a[1]-a[0])/11;
+    const parity=(a[0]%2)!==(a[1]%2)?1:0;
+    return .6*spread+.4*parity;
+  }
+
+  function starScore(pair,s,k){
+    const x=pair[0],y=pair[1];
+    const f=(s.sf[x]/s.msf+s.sf[y]/s.msf)/2;
+    const r=(s.sr[x]/s.msr+s.sr[y]/s.msr)/2;
+    const q=starStructure(pair);
+    return k==="frequency"?f:
+      k==="recency"?r:
+      k==="structure"?q:
+      k==="anti"?.5*(1-q)+.5*(1-f):
+      .42*f+.28*r+.30*q;
+  }
+
+  function rng(seed){
+    let x=seed>>>0;
+    return ()=>{x=(1664525*x+1013904223)>>>0;return x/4294967296};
+  }
+
+  function grid(r){
+    const a=[];
+    while(a.length<5){
+      const x=1+Math.floor(r()*50);
+      if(!a.includes(x))a.push(x);
+    }
+    return a.sort((a,b)=>a-b);
+  }
+
+  function stars(r){
+    const a=[];
+    while(a.length<2){
+      const x=1+Math.floor(r()*12);
+      if(!a.includes(x))a.push(x);
+    }
+    return a.sort((a,b)=>a-b);
+  }
+
+  function hits(a,b){
+    let z=0;
+    for(const x of a)if(b.includes(x))z++;
+    return z;
+  }
+
+  function pick(train,k,seed){
+    const r=rng(seed),s=stats(train);
+    if(k==="random")return{n:grid(r),s:stars(r)};
+
+    let bestN=null;
+    for(let i=0;i<cand;i++){
+      const a=grid(r),v=score(a,s,k);
+      if(!bestN||v>bestN.v)bestN={n:a,v};
+    }
+
+    let bestS=[1,2],bestV=-Infinity;
+    for(let x=1;x<=12;x++)for(let y=x+1;y<=12;y++){
+      const v=starScore([x,y],s,k);
+      if(v>bestV){bestV=v;bestS=[x,y]}
+    }
+    return{n:bestN.n,s:bestS};
+  }
+
+  function randomReference(test,seed){
+    let sn=0,ss=0;
+    for(let r=0;r<randomRep;r++){
+      const q=rng(seed+r*104729+17);
+      sn+=hits(grid(q),test.n);
+      ss+=hits(stars(q),test.s);
+    }
+    return [sn/randomRep,ss/randomRep];
+  }
+
+  function bootstrapCI(d,seed){
+    const n=d.length;
+    if(!n)return[0,0];
+    const r=rng(seed),vals=new Array(boot);
+    for(let b=0;b<boot;b++){
+      let s=0;
+      for(let i=0;i<n;i++)s+=d[Math.floor(r()*n)];
+      vals[b]=s/n;
+    }
+    vals.sort((a,b)=>a-b);
+    return[
+      vals[Math.floor(.025*boot)],
+      vals[Math.floor(.975*boot)]
+    ];
+  }
+
+  function permutationP(d,seed){
+    const n=d.length;
+    if(!n)return 1;
+    const obs=Math.abs(d.reduce((a,b)=>a+b,0)/n);
+    const r=rng(seed);
+    let ge=0;
+    for(let b=0;b<permRep;b++){
+      let s=0;
+      for(let i=0;i<n;i++)s+=(r()<.5?-1:1)*d[i];
+      if(Math.abs(s/n)>=obs-1e-12)ge++;
+    }
+    return (ge+1)/(permRep+1);
+  }
+
+  // Fixed chronological expanding-window protocol.
+  const usableEnd=draws.length-holdout;
+  const maxStart=usableEnd-block;
+  const starts=[];
+  for(let i=0;i<folds;i++){
+    const cut=Math.round(minTrain+(maxStart-minTrain)*((i+1)/folds));
+    if(cut+block<=draws.length)starts.push(cut);
+  }
+
+  let total=starts.length*models.length,done=0;
+
+  for(let fi=0;fi<starts.length;fi++){
+    const cut=starts[fi];
+    const train=draws.slice(0,cut);
+    const test=draws.slice(cut,cut+block);
+
+    // One common random reference for all methods on each test draw.
+    // It is an average over 20 independent random grids.
+    const refN=[],refS=[];
+    for(let j=0;j<test.length;j++){
+      const seed=(cut+1)*1000003+(j+1)*9176+fi*7919;
+      const q=randomReference(test[j],seed);
+      refN.push(q[0]);refS.push(q[1]);
+    }
+
+    for(const [k,label] of models){
+      const foldN=[],foldS=[];
+
+      for(let j=0;j<test.length;j++){
+        const seed=(cut+1)*1000003+(j+1)*9176+k.length*131+fi*7919;
+
+        if(k==="random"){
+          // Report one independent random draw per test for the raw random row.
+          const q=rng(seed+555555);
+          foldN.push(hits(grid(q),test[j].n));
+          foldS.push(hits(stars(q),test[j].s));
+        }else{
+          const p=pick(train,k,seed);
+          foldN.push(hits(p.n,test[j].n));
+          foldS.push(hits(p.s,test[j].s));
+        }
+      }
+
+      R[k].num.push(...foldN);
+      R[k].star.push(...foldS);
+      R[k].fold.push({
+        meanN:foldN.reduce((a,b)=>a+b,0)/foldN.length,
+        meanS:foldS.reduce((a,b)=>a+b,0)/foldS.length,
+        refN:refN.reduce((a,b)=>a+b,0)/refN.length,
+        refS:refS.reduce((a,b)=>a+b,0)/refS.length
+      });
+
+      done++;
+      postMessage({
+        type:"p",
+        v:Math.round(done/total*100),
+        t:label+" · bloc "+(fi+1)+"/"+starts.length
+      });
+    }
+  }
+
+
+  // LOCKED FINAL HOLDOUT:
+  // The last 180 draws are never used for fitting any model in this run.
+  // They are evaluated once, after the temporal folds. This holdout is
+  // methodological only: because earlier versions of the lab already
+  // exposed the full 2013-2024 history, it is NOT a pristine blind test.
+  const H={};
+  models.forEach(m=>H[m[0]]={label:m[1],num:[],star:[],refN:[],refS:[],dN:[],dS:[]});
+  const hTrain=draws.slice(0,usableEnd);
+  const hTest=draws.slice(usableEnd);
+
+  // Fixed paired reference for the holdout: 20 independent random grids
+  // are generated for each validation draw. The same reference is used
+  // to compare every non-random model on that draw.
+  for(let j=0;j<hTest.length;j++){
+    const seed=(usableEnd+1)*1000003+(j+1)*9176+991;
+    const q=randomReference(hTest[j],seed);
+    for(const [k,label] of models){
+      H[k].refN.push(q[0]);
+      H[k].refS.push(q[1]);
+    }
+  }
+
+  for(const [k,label] of models){
+    for(let j=0;j<hTest.length;j++){
+      const seed=(usableEnd+1)*1000003+(j+1)*9176+k.length*131+991;
+      const p=pick(hTrain,k,seed);
+      H[k].num.push(hits(p.n,hTest[j].n));
+      H[k].star.push(hits(p.s,hTest[j].s));
+    }
+    H[k].dN=H[k].num.map((v,i)=>v-H[k].refN[i]);
+    H[k].dS=H[k].star.map((v,i)=>v-H[k].refS[i]);
+    H[k].meanDN=H[k].dN.reduce((a,b)=>a+b,0)/H[k].dN.length;
+    H[k].meanDS=H[k].dS.reduce((a,b)=>a+b,0)/H[k].dS.length;
+    H[k].ciN=bootstrapCI(H[k].dN,700000+k.length*17);
+    H[k].ciS=bootstrapCI(H[k].dS,800000+k.length*19);
+    H[k].pN=permutationP(H[k].dN,900000+k.length*23);
+    H[k].pS=permutationP(H[k].dS,1000000+k.length*29);
+  }
+  postMessage({type:"holdout",H,n:holdout});
+
+  // Paired deltas against the 20-replicate random reference.
+  // For every strategy, compare each individual test result with the
+  // corresponding random-reference mean for the same draw.
+  for(const [k,label] of models){
+    if(k==="random"){
+      R[k].deltaN=0;R[k].deltaS=0;
+      R[k].ciN=[0,0];R[k].ciS=[0,0];
+      R[k].pN=1;R[k].pS=1;
+      continue;
+    }
+
+    // Reconstruct the same reference means deterministically.
+    const dn=[],ds=[];
+    let idx=0;
+    for(let fi=0;fi<starts.length;fi++){
+      const cut=starts[fi],test=draws.slice(cut,cut+block);
+      for(let j=0;j<test.length;j++){
+        const seed=(cut+1)*1000003+(j+1)*9176+fi*7919;
+        const q=randomReference(test[j],seed);
+        dn.push(R[k].num[idx]-q[0]);
+        ds.push(R[k].star[idx]-q[1]);
+        idx++;
+      }
+    }
+
+    R[k].deltaN=dn.reduce((a,b)=>a+b,0)/dn.length;
+    R[k].deltaS=ds.reduce((a,b)=>a+b,0)/ds.length;
+    R[k].ciN=bootstrapCI(dn,12345+k.length*17);
+    R[k].ciS=bootstrapCI(ds,54321+k.length*19);
+    R[k].pN=permutationP(dn,70001+k.length*23);
+    R[k].pS=permutationP(ds,90001+k.length*29);
+  }
+
+  postMessage({type:"done",R,folds:starts.length,block,randomRep,boot,permRep});
+}`;
+
+
+
+
+const url=URL.createObjectURL(new Blob([src],{type:"application/javascript"}));worker=new Worker(url);
+let holdoutHTML="";
+worker.onmessage=e=>{
+  const d=e.data;
+  if(d.type==="p"){
+    $("pbar").style.width=d.v+"%";
+    $("ptext").textContent=d.t+" · "+d.v+"%";
+  }else if(d.type==="holdout"){
+    const H=d.H;
+    const keys=Object.keys(H).filter(k=>k!=="random");
+
+    // Holm step-down adjustment across 10 model/outcome tests
+    // (5 methods × numbers/stars). This is reported descriptively to
+    // control the family-wise error rate after multiple comparisons.
+    const tests=[];
+    keys.forEach(k=>{tests.push({k,kind:"N",p:H[k].pN});tests.push({k,kind:"S",p:H[k].pS});});
+    tests.sort((a,b)=>a.p-b.p);
+    const m=tests.length;
+    const adj={};
+    let running=0;
+    for(let i=0;i<tests.length;i++){
+      const a=Math.min(1,(m-i)*tests[i].p);
+      running=Math.max(running,a);
+      adj[tests[i].k+tests[i].kind]=running;
+    }
+
+    let h='<h3>Holdout final — audit statistique</h3>';
+    h+='<p class="tiny">180 tirages réservés avant l’évaluation. Chaque méthode est comparée, tirage par tirage, à la moyenne de 20 grilles aléatoires indépendantes. Les Δ, IC bootstrap et p de permutation portent sur ces différences appariées.</p>';
+    h+='<table class="table"><tr><th>Modèle</th><th>Num./5</th><th>Δ N</th><th>IC Δ</th><th>p</th><th>p Holm</th><th>Étoiles/2</th><th>Δ É</th><th>IC Δ</th><th>p</th><th>p Holm</th></tr>';
+    for(const k of keys){
+      const a=summary(H[k].num), b=summary(H[k].star);
+      h+=`<tr><td>${H[k].label}</td><td>${a.mean.toFixed(3)}</td><td>${H[k].meanDN>=0?"+":""}${H[k].meanDN.toFixed(3)}</td><td>${H[k].ciN[0].toFixed(3)}–${H[k].ciN[1].toFixed(3)}</td><td>${H[k].pN.toFixed(3)}</td><td>${adj[k+"N"].toFixed(3)}</td><td>${b.mean.toFixed(3)}</td><td>${H[k].meanDS>=0?"+":""}${H[k].meanDS.toFixed(3)}</td><td>${H[k].ciS[0].toFixed(3)}–${H[k].ciS[1].toFixed(3)}</td><td>${H[k].pS.toFixed(3)}</td><td>${adj[k+"S"].toFixed(3)}</td></tr>`;
+    }
+    const ar=summary(H.random.num), as=summary(H.random.star);
+    h+=`<tr><td>Aléatoire (contrôle brut)</td><td>${ar.mean.toFixed(3)}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>${as.mean.toFixed(3)}</td><td>—</td><td>—</td><td>—</td><td>—</td></tr></table>`;
+    h+='<p class="tiny"><strong>Lecture :</strong> un IC Δ qui contient 0 n’établit pas d’avantage sur le holdout. Le p de permutation est descriptif ; le p Holm est une correction des comparaisons multiples sur les 10 tests (5 méthodes × 2 types de résultats). Aucun de ces indicateurs ne transforme une loterie en système prédictif démontré.</p>';
+    h+='<h4>Données brutes du holdout</h4><p class="tiny">Chaque méthode a 180 scores individuels. Ces données permettent un audit ultérieur sans relancer le calcul.</p>';
+    holdoutHTML=h;
+  }else{
+    const R=d.R;
+    let h='<table class="table"><tr><th>Modèle</th><th>Num./5</th><th>Δ vs aléa</th><th>IC bootstrap Δ</th><th>p permutation</th><th>Étoiles/2</th><th>Δ vs aléa</th><th>IC bootstrap Δ</th><th>p permutation</th></tr>';
+    for(const k of Object.keys(R)){
+      const a=summary(R[k].num),b=summary(R[k].star);
+      const ciN=R[k].ciN,ciS=R[k].ciS;
+      h+=`<tr><td>${R[k].label}</td>
+        <td>${a.mean.toFixed(3)}</td>
+        <td>${R[k].deltaN>=0?"+":""}${R[k].deltaN.toFixed(3)}</td>
+        <td>${k==="random"?"—":ciN[0].toFixed(3)+"–"+ciN[1].toFixed(3)}</td>
+        <td>${k==="random"?"—":R[k].pN.toFixed(3)}</td>
+        <td>${b.mean.toFixed(3)}</td>
+        <td>${R[k].deltaS>=0?"+":""}${R[k].deltaS.toFixed(3)}</td>
+        <td>${k==="random"?"—":ciS[0].toFixed(3)+"–"+ciS[1].toFixed(3)}</td>
+        <td>${k==="random"?"—":R[k].pS.toFixed(3)}</td></tr>`;
+    }
+    h+='</table><p class="tiny"><strong>Protocole V5 :</strong> chaque méthode est entraînée uniquement sur le passé. '+
+      'La référence aléatoire utilise 20 grilles indépendantes par tirage de validation, puis leur moyenne est utilisée dans la comparaison appariée. Δ est calculé sur des tests appariés. '+
+      'L’IC bootstrap porte sur la distribution des écarts individuels ; le p de permutation est un test descriptif par inversion aléatoire des signes. '+
+      'Ces indicateurs ne corrigent pas à eux seuls le surapprentissage, les dépendances temporelles ni les multiples comparaisons.</p>';
+
+    h+='<h3>Stabilité par bloc</h3><table class="table smalltable"><tr><th>Modèle</th>'+
+      Array.from({length:d.folds},(_,i)=>`<th>B${i+1}<br><span class="tiny">N / É</span></th>`).join("")+
+      '</tr>';
+    for(const k of Object.keys(R)){
+      h+=`<tr><td>${R[k].label}</td>${
+        R[k].fold.map(x=>`<td>${x.meanN.toFixed(2)} / ${x.meanS.toFixed(2)}</td>`).join("")
+      }</tr>`;
+    }
+    h+='</table><p class="tiny"><strong>Lecture :</strong> un écart positif avec un IC bootstrap entièrement au-dessus de 0 est compatible avec un avantage observé sur cet échantillon. '+
+      'Un p faible ne constitue pas une preuve de prédiction. Les résultats doivent rester stables sur plusieurs blocs et résister à des validations supplémentaires. V5 ajoute ensuite un suivi prospectif figé, sans réécriture des prédictions passées.</p>';
+
+    if(holdoutHTML) h+=holdoutHTML;
+    $("out").innerHTML=h;
+    $("pbar").style.width="100%";
+    $("ptext").textContent=`Terminé · ${d.folds} blocs × ${d.block} tirages · 20 aléas/test · 5 000 permutations`;
+    $("run").disabled=false;$("stop").hidden=true;
+    worker.terminate();worker=null;URL.revokeObjectURL(url);
+  }
+};
+worker.onerror=()=>{ $("out").textContent="Erreur du moteur de validation."; $("run").disabled=false;$("stop").hidden=true;worker=null;URL.revokeObjectURL(url)};
+worker.postMessage({draws:state.draws,folds,block,cand,minTrain,holdout,randomRep,boot,permRep});
+};
+
+/* V6 audited prospective tracker */
+const V6KEY="euromillions_lab_v6_audit_v1";
+const V6SCHEMA="EUROMILLIONS-LAB-V6-AUDIT-1";
+function loadV6(){
+  try{return JSON.parse(localStorage.getItem(V6KEY)||'{"predictions":[],"protocol":null}')}
+  catch(e){return {predictions:[],protocol:null}}
+}
+function saveV6(x){localStorage.setItem(V6KEY,JSON.stringify(x))}
+function isoNow(){return new Date().toISOString()}
+function hex(buf){return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+async function sha256(text){
+  if(!crypto?.subtle)return "SHA-256-unavailable";
+  return hex(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text)));
+}
+function uid(){
+  return "V6-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,10).toUpperCase();
+}
+function protocolSnapshot(ds){
+  return {
+    schema:V6SCHEMA, version:"V6.0",
+    historyCount:ds.length,
+    historyEnd:ds.at(-1)?.date||null,
+    rule:"Ensemble fixe fréquence/récence/structure; étoiles fréquence/récence",
+    candidates:6000,
+    createdAt:isoNow()
+  };
+}
+function buildPrediction(ds){
+  const f=Array(51).fill(0),r=Array(51).fill(0),sf=Array(13).fill(0),sr=Array(13).fill(0);
+  const a=ds.slice(-80),L=a.length;
+  a.forEach((d,i)=>{
+    const w=Math.exp(-(L-i)/20);
+    d.n.forEach(x=>{f[x]++;r[x]+=w});
+    d.s.forEach(x=>{sf[x]++;sr[x]+=w});
+  });
+  const norm=arr=>{const m=Math.max(1,...arr.slice(1));return x=>arr[x]/m};
+  const nf=norm(f),nr=norm(r),nsf=norm(sf),nsr=norm(sr);
+  const structure=a=>{
+    const sum=a.reduce((x,y)=>x+y,0), ev=a.filter(x=>x%2===0).length;
+    const decades=new Set(a.map(x=>Math.floor((x-1)/10))).size;
+    return .35*(1-Math.min(1,Math.abs(sum-127.5)/127.5))
+      +.25*(1-Math.abs(ev-2.5)/2.5)+.4*decades/5;
+  };
+  let bestN=null;
+  for(let seed=0;seed<6000;seed++){
+    let x=seed+1,a=[];
+    while(a.length<5){x=(1664525*x+1013904223)>>>0;const v=1+(x%50);if(!a.includes(v))a.push(v)}
+    a.sort((p,q)=>p-q);
+    const score=a.reduce((z,v)=>z+.42*nf(v)+.28*nr(v),0)/5+.30*structure(a);
+    if(!bestN||score>bestN.score)bestN={n:a,score};
+  }
+  let bestS=null;
+  for(let x=1;x<=12;x++)for(let y=x+1;y<=12;y++){
+    const score=.6*((nsf(x)+nsf(y))/2)+.4*((nsr(x)+nsr(y))/2);
+    if(!bestS||score>bestS.score)bestS={s:[x,y],score};
+  }
+  return {n:bestN.n,s:bestS.s,scoreN:bestN.score,scoreS:bestS.score};
+}
+async function makeV6(){
+  if(!state.draws||state.draws.length<300){
+    $("predOut").innerHTML='<p class="tiny">Charge au moins 300 tirages avant de créer une prédiction.</p>';return;
+  }
+  const db=loadV6();
+  const pending=db.predictions.find(x=>x.status==="pending");
+  if(pending){renderV6();return}
+  const ds=state.draws.slice(), pred=buildPrediction(ds), proto=protocolSnapshot(ds);
+  const rec={
+    id:uid(), schema:V6SCHEMA, version:"V6.0", status:"pending",
+    createdAt:isoNow(), historyEnd:proto.historyEnd, historyCount:proto.historyCount,
+    n:pred.n,s:pred.s, rule:proto.rule,
+    modelScores:{numbers:pred.scoreN,stars:pred.scoreS},
+    protocol:proto
+  };
+  rec.canonical=JSON.stringify(rec);
+  rec.hash=await sha256(rec.canonical);
+  db.protocol=db.protocol||{schema:V6SCHEMA,firstStartedAt:isoNow()};
+  db.predictions.push(rec); saveV6(db); renderV6();
+}
+function renderV6(){
+  const db=loadV6(), pending=db.predictions.find(x=>x.status==="pending");
+  let h='<h3>Journal prospectif V6</h3>';
+  h+=`<p class="tiny">${db.predictions.length} prédiction(s) enregistrée(s). Le journal local ne remplace pas une preuve externe d’horodatage.</p>`;
+  if(pending){
+    h+=`<p><strong>Prédiction figée</strong> · ${pending.createdAt}</p>
+      <p class="tiny">ID : ${pending.id} · historique : ${pending.historyCount} tirages · dernier connu : ${pending.historyEnd}</p>
+      <p class="mono"><strong>${pending.n.join(" · ")}</strong> + <strong>⭐ ${pending.s.join(" · ")}</strong></p>
+      <p class="tiny">SHA-256 : <span class="mono">${pending.hash}</span></p>`;
+    $("recordDraw").disabled=false;
+  }else{
+    h+='<p class="tiny">Aucune prédiction en attente. Crée la prochaine avant le tirage.</p>';
+    $("recordDraw").disabled=true;
+  }
+  const closed=db.predictions.filter(x=>x.status==="closed");
+  if(closed.length){
+    h+='<h4>Historique</h4><table class="table smalltable"><tr><th>Date</th><th>ID</th><th>Grille</th><th>Résultat</th><th>Hash</th></tr>';
+    for(const x of closed.slice().reverse()){
+      h+=`<tr><td>${x.createdAt}</td><td>${x.id}</td><td>${x.n.join("·")} + ⭐${x.s.join("·")}</td><td>${x.real.hitsN}/5 · ${x.real.hitsS}/2</td><td class="mono">${String(x.hash).slice(0,16)}…</td></tr>`;
+    }
+    h+='</table>';
+  }
+  h+='<p class="tiny"><strong>Audit :</strong> une prédiction est créée une seule fois pour la période d’historique disponible. La V6 conserve le snapshot, les paramètres, l’horodatage et une empreinte SHA-256. Une suppression du stockage local reste techniquement possible : pour un audit indépendant, exporte régulièrement le journal.</p>';
+  $("predOut").innerHTML=h;
+}
+$("makePrediction").onclick=makeV6;
+$("recordDraw").onclick=()=>{
+  const db=loadV6(), rec=db.predictions.find(x=>x.status==="pending");
+  if(!rec)return;
+  const raw=prompt("Entre le tirage réel sous la forme : 1 2 3 4 5 | 1 2");
+  if(!raw)return;
+  const parts=raw.split("|");
+  if(parts.length!==2){alert("Format attendu : 1 2 3 4 5 | 1 2");return}
+  const n=parts[0].trim().split(/\s+/).map(Number), st=parts[1].trim().split(/\s+/).map(Number);
+  if(n.length!==5||st.length!==2||n.some(x=>x<1||x>50)||st.some(x=>x<1||x>12)||new Set(n).size!==5||new Set(st).size!==2){alert("Tirage invalide.");return}
+  rec.status="closed";rec.closedAt=isoNow();
+  rec.real={n:n.sort((a,b)=>a-b),s:st.sort((a,b)=>a-b),hitsN:n.filter(x=>rec.n.includes(x)).length,hitsS:st.filter(x=>rec.s.includes(x)).length};
+  saveV6(db);renderV6();
+};
+function exportV6(){
+  const blob=new Blob([JSON.stringify(loadV6(),null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="euromillions-lab-v6-audit.json";a.click();URL.revokeObjectURL(a.href);
+}
+const exportBtn=document.createElement("button");exportBtn.className="secondary";exportBtn.textContent="Exporter le journal V6";
+exportBtn.onclick=exportV6;$("prospective").querySelector(".grid2").appendChild(exportBtn);
+renderV6();
+
+</script>
+</body></html>
