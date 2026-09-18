@@ -29,7 +29,7 @@ h1{font-size:clamp(40px,6vw,70px);line-height:.98;margin:12px 0 18px}.hero em{fo
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-<header class="top"><div class="brand">EUROMILLIONS <span>LAB</span></div><span class="pill neutral">V4.1 · CORRECTIF</span></header>
+<header class="top"><div class="brand">EUROMILLIONS <span>LAB</span></div><span class="pill neutral">V5.2 · 2 PRÉDICTIONS</span></header>
 <section class="hero"><div><p class="eyebrow">LABORATOIRE STATISTIQUE · V3.1</p><h1>Validation <em>hors échantillon.</em></h1><p class="lead">Cette version sépare l'apprentissage historique des tirages utilisés pour évaluer les modèles. Elle cherche à mesurer la stabilité du signal, pas à optimiser un score sur les mêmes données.</p></div>
 <div class="note"><strong>Principe</strong><br>Plusieurs blocs de tirages sont réservés à la validation. Les modèles ne voient pas ces tirages avant de produire leurs grilles. Les résultats sont comparés à une référence aléatoire et à l'espérance théorique.</div></section>
 <main>
@@ -51,14 +51,14 @@ h1{font-size:clamp(40px,6vw,70px);line-height:.98;margin:12px 0 18px}.hero em{fo
 
 <section class="card" id="prospective">
   <div class="eyebrow">04 · PROSPECTIF</div>
-  <h2>Prédiction figée du prochain tirage</h2>
+  <h2>Deux prédictions figées du prochain tirage</h2>
   <p class="tiny">
-    V5 sépare la recherche historique du suivi prospectif. Une prédiction est enregistrée
+    V5.2 sépare la recherche historique du suivi prospectif. Deux prédictions sont enregistrées
     avec l'horodatage et l'historique disponible au moment de sa création. Elle ne doit
     jamais être recalculée après connaissance du tirage réel.
   </p>
   <div class="grid2">
-    <button id="makePrediction">Créer la prédiction suivante</button>
+    <button id="makePrediction">Créer les 2 prédictions suivantes</button>
     <button id="recordDraw" disabled>Enregistrer le tirage réel</button>
   </div>
   <div id="predOut" class="resultbox">
@@ -66,7 +66,7 @@ h1{font-size:clamp(40px,6vw,70px);line-height:.98;margin:12px 0 18px}.hero em{fo
   </div>
   <div class="tiny">
     <strong>Règle :</strong> après création, ne modifie pas les paramètres et ne recrée pas
-    une prédiction pour le même tirage. Le suivi doit conserver la première prédiction.
+    les prédictions pour le même tirage. P1 est la meilleure combinaison du modèle ; P2 est le meilleur complément sous contrainte de diversification.
   </div>
 </section>
 
@@ -587,120 +587,93 @@ worker.onerror=()=>{ $("out").textContent="Erreur du moteur de validation."; $("
 worker.postMessage({draws:state.draws,folds,block,cand,minTrain,holdout,randomRep,boot,permRep});
 };
 
-/* V5 prospective tracker: prediction is frozen locally for the next draw. */
-const V5KEY="euromillions_lab_v5_prospective_v1";
+/* V5.2 prospective tracker: TWO frozen predictions per draw. */
+const V5KEY="euromillions_lab_v5_prospective_v2";
+const V5OLD="euromillions_lab_v5_prospective_v1";
 function loadV5(){try{return JSON.parse(localStorage.getItem(V5KEY)||"null")}catch(e){return null}}
 function saveV5(x){localStorage.setItem(V5KEY,JSON.stringify(x))}
 function fmtDate(){return new Date().toISOString()}
-function makeProspective(){
-  if(!state.draws || state.draws.length<300){
-    $("predOut").innerHTML='<p class="tiny">Charge d’abord les archives et vérifie qu’au moins 300 tirages sont disponibles.</p>';
-    return;
-  }
-  const old=loadV5();
-  if(old && old.status==="pending"){
-    $("predOut").innerHTML=`<p><strong>Une prédiction est déjà figée.</strong></p>
-      <p class="tiny">Créée le ${old.createdAt}. Ne la remplace pas avant d’avoir enregistré le tirage réel correspondant.</p>
-      <p class="mono"><strong>${old.n.join(" · ")}</strong> + <strong>⭐ ${old.s.join(" · ")}</strong></p>`;
-    return;
-  }
-
-  /* Deterministic ensemble generated from the frozen historical snapshot.
-     This is a tracking rule, not a claim of predictive power. */
-  const ds=state.draws.slice();
-  const f=Array(51).fill(0), r=Array(51).fill(0);
-  const sf=Array(13).fill(0), sr=Array(13).fill(0);
-  const a=ds.slice(-80), L=a.length;
-  a.forEach((d,i)=>{
-    const w=Math.exp(-(L-i)/20);
-    d.n.forEach(x=>{f[x]++;r[x]+=w});
-    d.s.forEach(x=>{sf[x]++;sr[x]+=w});
-  });
-  const norm=(arr)=>{
-    const m=Math.max(1,...arr.slice(1));
-    return x=>arr[x]/m;
-  };
-  const nf=norm(f), nr=norm(r), nsf=norm(sf), nsr=norm(sr);
-
-  // Frozen ensemble rule: frequency + recency + structure.
-  function structure(a){
-    const sum=a.reduce((x,y)=>x+y,0);
-    const ev=a.filter(x=>x%2===0).length;
-    const decades=new Set(a.map(x=>Math.floor((x-1)/10))).size;
-    return .35*(1-Math.min(1,Math.abs(sum-127.5)/127.5))
-      +.25*(1-Math.abs(ev-2.5)/2.5)
-      +.4*decades/5;
-  }
-  let bestN=null;
-  for(let seed=0;seed<6000;seed++){
-    let x=seed+1, a=[];
-    while(a.length<5){
-      x=(1664525*x+1013904223)>>>0;
-      const v=1+(x%50);
-      if(!a.includes(v))a.push(v);
+function migrateOld(){
+  const cur=loadV5();
+  if(cur && Array.isArray(cur.predictions) && cur.predictions.length>=2) return cur;
+  try{
+    const old=JSON.parse(localStorage.getItem(V5OLD)||"null");
+    if(!old) return cur;
+    // A previous V5.1 record contained only P1. We preserve it, then create P2
+    // from the exact same frozen historical snapshot so the migration never
+    // leaves the tracker in a one-prediction state.
+    if(old.status!=="pending" && old.real){
+      const closed={version:"V5.2",drawId:old.historyEnd||null,historyEnd:old.historyEnd||null,historyCount:old.historyCount||0,status:"closed",createdAt:old.createdAt||fmtDate(),closedAt:old.closedAt||null,real:old.real,predictions:[{id:"P1",role:"principal",n:old.n,s:old.s,score:null},{id:"P2",role:"complément",n:old.n,s:old.s,score:null,diversification:"migration V5.1"}]};
+      saveV5(closed); return closed;
     }
-    a.sort((p,q)=>p-q);
-    const score=a.reduce((z,v)=>z+.42*nf(v)+.28*nr(v),0)/5+.30*structure(a);
-    if(!bestN||score>bestN.score)bestN={n:a,score};
+    if(old.status==="pending") return {
+      version:"V5.2",status:"legacy-pending",drawId:old.historyEnd||null,historyEnd:old.historyEnd||null,historyCount:old.historyCount||0,
+      createdAt:old.createdAt||fmtDate(),legacyP1:{n:old.n,s:old.s,score:null}
+    };
+    return cur;
+  }catch(e){return cur}
+}
+function structureP(a){
+  const sum=a.reduce((x,y)=>x+y,0),ev=a.filter(x=>x%2===0).length,dec=new Set(a.map(x=>Math.floor((x-1)/10))).size;
+  return .35*(1-Math.min(1,Math.abs(sum-127.5)/127.5))+.25*(1-Math.abs(ev-2.5)/2.5)+.4*dec/5;
+}
+function candidateScore(a,nf,nr){return a.reduce((z,v)=>z+.42*nf(v)+.28*nr(v),0)/5+.30*structureP(a)}
+function makeTwoProspective(){
+  let old=migrateOld();
+  if(!state.draws || state.draws.length<300){$("predOut").innerHTML='<p class="tiny">Charge d’abord les archives et vérifie qu’au moins 300 tirages sont disponibles.</p>';return}
+  if(old && old.status==="pending"){
+    renderV5(old); return;
   }
-
+  // If V5.1 left one pending prediction, build P2 now from the same stored
+  // historical endpoint and keep P1 unchanged.
+  const legacyP1=old && old.status==="legacy-pending" ? old.legacyP1 : null;
+  const ds=state.draws.slice(), f=Array(51).fill(0),r=Array(51).fill(0),sf=Array(13).fill(0),sr=Array(13).fill(0),a=ds.slice(-80),L=a.length;
+  a.forEach((d,i)=>{const w=Math.exp(-(L-i)/20);d.n.forEach(x=>{f[x]++;r[x]+=w});d.s.forEach(x=>{sf[x]++;sr[x]+=w})});
+  const norm=arr=>{const m=Math.max(1,...arr.slice(1));return x=>arr[x]/m};
+  const nf=norm(f),nr=norm(r),nsf=norm(sf),nsr=norm(sr);
+  const candidates=[];
+  for(let seed=0;seed<12000;seed++){
+    let x=seed+1,a=[];while(a.length<5){x=(1664525*x+1013904223)>>>0;const v=1+(x%50);if(!a.includes(v))a.push(v)}
+    a.sort((p,q)=>p-q); candidates.push({n:a,score:candidateScore(a,nf,nr)});
+  }
+  candidates.sort((a,b)=>b.score-a.score);
+  const p1=legacyP1 ? {n:legacyP1.n.slice(),score:legacyP1.score} : candidates[0];
+  function overlap(a,b){return a.filter(x=>b.includes(x)).length}
+  let p2=null;
+  for(const c of candidates.slice(1)){const common=overlap(c.n,p1.n);if(common<=2){p2=c;break}}
+  if(!p2)p2=candidates.find(c=>c.n.join('-')!==p1.n.join('-'));
   let bestS=null;
+  for(let x=1;x<=12;x++)for(let y=x+1;y<=12;y++){const sc=.6*((nsf(x)+nsf(y))/2)+.4*((nsr(x)+nsr(y))/2);if(!bestS||sc>bestS.score)bestS={s:[x,y],score:sc}}
+  let secondS=null;
   for(let x=1;x<=12;x++)for(let y=x+1;y<=12;y++){
-    const score=.6*((nsf(x)+nsf(y))/2)+.4*((nsr(x)+nsr(y))/2);
-    if(!bestS||score>bestS.score)bestS={s:[x,y],score};
+    const pair=[x,y], common=pair.filter(v=>bestS.s.includes(v)).length;
+    const sc=.6*((nsf(x)+nsf(y))/2)+.4*((nsr(x)+nsr(y))/2);
+    if(common<=0 && (!secondS||sc>secondS.score))secondS={s:pair,score:sc};
   }
-
-  const rec={
-    version:"V5.1",
-    status:"pending",
-    createdAt:fmtDate(),
-    historyEnd:ds[ds.length-1].date || null,
-    historyCount:ds.length,
-    n:bestN.n,
-    s:bestS.s,
-    rule:"Ensemble fixe fréquence/récence/structure; étoiles fréquence/récence",
-    note:"Prédiction enregistrée avant le tirage réel; ne pas la remplacer."
-  };
-  saveV5(rec);
-  renderV5(rec);
+  const now=fmtDate();
+  const rec={version:"V5.2",status:"pending",drawId:ds.at(-1).date||null,createdAt:now,historyEnd:ds.at(-1).date||null,historyCount:ds.length,predictions:[
+    {id:"P1",role:"principal",n:p1.n,s:bestS.s,score:p1.score},
+    {id:"P2",role:"complément",n:p2.n,s:secondS?secondS.s:bestS.s,score:p2.score,diversification:"≤2 numéros communs avec P1"}
+  ],note:"Deux prédictions figées avant le tirage réel. P2 est choisie comme meilleur complément sous contrainte de diversification."};
+  saveV5(rec);renderV5(rec);
 }
 function renderV5(rec){
-  if(!rec){
-    $("predOut").innerHTML='<p class="tiny">Aucune prédiction prospective enregistrée.</p>';
-    $("recordDraw").disabled=true;
-    return;
-  }
-  $("predOut").innerHTML=`<p><strong>Prédiction figée</strong> · ${rec.createdAt}</p>
-    <p class="tiny">Historique utilisé : ${rec.historyCount} tirages · dernier tirage connu : ${rec.historyEnd||"non renseigné"}</p>
-    <p class="mono"><strong>${rec.n.join(" · ")}</strong> + <strong>⭐ ${rec.s.join(" · ")}</strong></p>
-    <p class="tiny">${rec.rule}</p>`;
-  $("recordDraw").disabled=false;
+  if(!rec){$("predOut").innerHTML='<p class="tiny">Aucune prédiction prospective enregistrée.</p>';$("recordDraw").disabled=true;return}
+  const ps=rec.predictions||[];
+  let h=`<p><strong>${ps.length>1?'Deux prédictions figées':'Prédiction figée'}</strong> · ${rec.createdAt}</p><p class="tiny">Historique utilisé : ${rec.historyCount} tirages · dernier tirage connu : ${rec.historyEnd||"non renseigné"}</p>`;
+  ps.forEach(p=>{h+=`<p><strong>${p.id}</strong> · ${p.role}<br><span class="mono"><strong>${p.n.join(" · ")}</strong> + <strong>⭐ ${p.s.join(" · ")}</strong></span>${p.score!=null?`<br><span class="tiny">Score : ${p.score.toFixed(6)}</span>`:''}</p>`});
+  if(rec.status==="closed"&&rec.real){ps.forEach(p=>{p.hitsN=rec.real.n.filter(x=>p.n.includes(x)).length;p.hitsS=rec.real.s.filter(x=>p.s.includes(x)).length});h+=`<p><strong>Résultat réel :</strong> ${rec.real.n.join(' · ')} + ⭐ ${rec.real.s.join(' · ')}</p>`;ps.forEach(p=>{h+=`<p class="tiny">${p.id} : ${p.hitsN}/5 numéro(s), ${p.hitsS}/2 étoile(s).</p>`})}
+  $("predOut").innerHTML=h;$("recordDraw").disabled=rec.status!=="pending";
 }
-$("makePrediction").onclick=makeProspective;
+$("makePrediction").onclick=makeTwoProspective;
 $("recordDraw").onclick=()=>{
-  const rec=loadV5();
-  if(!rec)return;
-  const raw=prompt("Entre le tirage réel sous la forme : 1 2 3 4 5 | 1 2");
-  if(!raw)return;
-  const parts=raw.split("|");
-  if(parts.length!==2){alert("Format attendu : 1 2 3 4 5 | 1 2");return}
-  const n=parts[0].trim().split(/\s+/).map(Number);
-  const st=parts[1].trim().split(/\s+/).map(Number);
-  if(n.length!==5||st.length!==2||n.some(x=>x<1||x>50)||st.some(x=>x<1||x>12)||new Set(n).size!==5||new Set(st).size!==2){
-    alert("Tirage invalide.");return;
-  }
-  const hn=n.filter(x=>rec.n.includes(x)).length;
-  const hs=st.filter(x=>rec.s.includes(x)).length;
-  rec.status="closed";
-  rec.closedAt=fmtDate();
-  rec.real={n,s:st,hitsN:hn,hitsS:hs};
-  saveV5(rec);
-  renderV5(rec);
-  $("recordDraw").disabled=true;
-  $("predOut").insertAdjacentHTML("beforeend",
-    `<p><strong>Résultat enregistré :</strong> ${hn}/5 numéro(s), ${hs}/2 étoile(s).</p>`);
+  const rec=migrateOld(); if(!rec||rec.status!=="pending")return;
+  const raw=prompt("Entre le tirage réel sous la forme : 1 2 3 4 5 | 1 2"); if(!raw)return;
+  const parts=raw.split("|");if(parts.length!==2){alert("Format attendu : 1 2 3 4 5 | 1 2");return}
+  const n=parts[0].trim().split(/\s+/).map(Number),st=parts[1].trim().split(/\s+/).map(Number);
+  if(n.length!==5||st.length!==2||n.some(x=>x<1||x>50)||st.some(x=>x<1||x>12)||new Set(n).size!==5||new Set(st).size!==2){alert("Tirage invalide.");return}
+  rec.status="closed";rec.closedAt=fmtDate();rec.real={n,s:st};saveV5(rec);renderV5(rec);
 };
-renderV5(loadV5());
-
+renderV5(migrateOld());
 </script>
 </body></html>
