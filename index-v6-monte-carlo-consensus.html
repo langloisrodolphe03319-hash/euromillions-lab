@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EuroMillions Lab — V6 Monte-Carlo Consensus</title>
+<style>
+:root{--bg:#06101b;--panel:#0d1b2c;--line:#203a54;--txt:#edf6ff;--muted:#9badc1;--blue:#46b7ff;--green:#63dfa2;--gold:#ffd35a;--red:#ff7f8d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#123a5d,#06101b 42%);color:var(--txt);font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.top{height:68px;border-bottom:1px solid #ffffff12;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;background:#06101bea;backdrop-filter:blur(14px);z-index:3}.brand{font-weight:900;letter-spacing:.08em}.brand span{color:var(--blue)}
+main{max-width:1180px;margin:auto}.hero{padding:42px 20px 25px;display:grid;grid-template-columns:1.25fr .75fr;gap:30px}h1{font-size:clamp(38px,6vw,68px);line-height:.98;margin:12px 0 18px}.hero em{font-style:normal;color:var(--blue)}.eyebrow,.kicker{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:.14em}.lead,.muted{color:var(--muted);line-height:1.5}
+.note,.warning{border:1px solid #355575;background:#0d2236;border-radius:14px;padding:18px;line-height:1.55}.note strong,.warning b{color:var(--gold)}
+.panel{margin:16px 20px;background:#0d1b2cf2;border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 14px 40px #0004}.head{display:flex;justify-content:space-between;align-items:center;gap:15px}h2{font-size:25px;margin:6px 0 15px}
+button{padding:11px 15px;border-radius:9px;font-weight:800;cursor:pointer}.primary{border:0;background:linear-gradient(90deg,#148fdd,#45baff);color:white}.secondary{border:1px solid #31516f;background:#081728;color:var(--txt)}button:disabled{opacity:.5;cursor:not-allowed}
+.controls{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.controls label{font-size:12px;color:var(--muted)}input,select{display:block;margin-top:5px;width:100%;padding:10px;border:1px solid #31516f;border-radius:9px;background:#081728;color:var(--txt)}
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:14px}.metrics>div{background:#091829;padding:14px;border-radius:12px}.metrics b{display:block;font-size:20px}.metrics span{color:var(--muted);font-size:12px}
+.progress{margin-top:14px}.bar{height:10px;background:#091829;border-radius:9px;overflow:hidden}.bar>div{height:100%;width:0;background:linear-gradient(90deg,#148fdd,#45baff);transition:width .15s}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.result{font-size:24px;font-weight:900;letter-spacing:.08em;margin:10px 0}.ball{display:inline-flex;width:38px;height:38px;align-items:center;justify-content:center;border-radius:50%;background:#173653;margin:3px}.star{background:#574817}
+.table{width:100%;border-collapse:collapse;margin-top:15px}.table th,.table td{padding:8px;border-bottom:1px solid #1c344b;text-align:left}.table th{color:var(--muted);font-size:12px}.tiny{font-size:11px;color:var(--muted)}
+@media(max-width:850px){.hero{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.metrics{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand">EUROMILLIONS <span>LAB</span></div><span>V6 · MONTE-CARLO CONSENSUS</span></header>
+
+<section class="hero">
+<div>
+<p class="eyebrow">EXPÉRIMENTATION MASSIVE</p>
+<h1>Consensus <em>Monte-Carlo.</em></h1>
+<p class="lead">10 000 stratégies × 100 000 grilles par stratégie. Le moteur travaille par lots dans un Web Worker, agrège les résultats sans conserver le milliard de grilles et recherche les numéros qui résistent à plusieurs familles de méthodes.</p>
+</div>
+<div class="note"><strong>À lire correctement</strong><br>Le résultat est un classement expérimental de consensus. Il ne transforme pas une combinaison en combinaison mathématiquement plus probable : EuroMillions reste un tirage aléatoire.</div>
+</section>
+
+<main>
+<section class="panel">
+<div class="head"><div><span class="kicker">01 · PARAMÈTRES</span><h2>Volume de calcul</h2></div><div><button id="run" class="primary">🚀 Lancer le moteur</button> <button id="stop" class="secondary" disabled>Arrêter</button></div></div>
+<div class="controls">
+<label>Stratégies<input id="strategies" type="number" value="10000" min="1" max="10000"></label>
+<label>Grilles / stratégie<input id="grids" type="number" value="100000" min="100" max="100000"></label>
+<label>Lot de grilles<input id="batch" type="number" value="1000" min="100" max="10000"></label>
+<label>Fenêtre historique<input id="window" type="number" value="80" min="10" max="500"></label>
+</div>
+<div class="metrics">
+<div><b id="total">0</b><span>Grilles prévues</span></div>
+<div><b id="done">0</b><span>Grilles traitées</span></div>
+<div><b id="elapsed">0 s</b><span>Temps écoulé</span></div>
+<div><b id="rate">0/s</b><span>Débit</span></div>
+<div><b id="families">8</b><span>Familles</span></div>
+</div>
+<div class="progress"><div id="ptext" class="tiny">Prêt.</div><div class="bar"><div id="pbar"></div></div></div>
+</section>
+
+<section class="panel">
+<div class="head"><div><span class="kicker">02 · DONNÉES</span><h2>Historique</h2></div><span class="tiny">CSV / TXT avec 5 numéros + 2 étoiles</span></div>
+<input id="file" type="file" accept=".csv,.txt">
+<p class="tiny">Si aucun historique n'est chargé, le moteur utilise une distribution uniforme. Pour une analyse V5 réelle, charge l'historique FDJ avant le calcul.</p>
+<div id="dataState" class="muted">Aucun historique chargé.</div>
+</section>
+
+<section class="panel">
+<div class="head"><div><span class="kicker">03 · CONSENSUS</span><h2>Résultat final</h2></div></div>
+<div class="grid2">
+<div><div class="tiny">5 NUMÉROS CONSENSUS</div><div id="numbers" class="result">—</div></div>
+<div><div class="tiny">2 ÉTOILES CONSENSUS</div><div id="stars" class="result">—</div></div>
+</div>
+<div class="warning"><b>Interprétation :</b> le consensus mesure la robustesse d'un numéro à travers les familles de stratégies et les stratégies aléatoires pondérées. Il ne s'agit pas d'une probabilité empirique de gagner le prochain tirage.</div>
+</section>
+
+<section class="panel">
+<div class="head"><div><span class="kicker">04 · AUDIT</span><h2>Classement des numéros</h2></div></div>
+<table class="table"><thead><tr><th>Rang</th><th>Numéro</th><th>Score consensus</th><th>Familles</th><th>Stratégies</th></tr></thead><tbody id="numTable"></tbody></table>
+<h2 style="margin-top:28px">Classement des étoiles</h2>
+<table class="table"><thead><tr><th>Rang</th><th>Étoile</th><th>Score consensus</th><th>Familles</th><th>Stratégies</th></tr></thead><tbody id="starTable"></tbody></table>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+let draws=[],worker=null,startTime=0,timer=null;
+
+function parseCSV(text){
+  const lines=text.replace(/^\\uFEFF/,"").replace(/\\r/g,"").split("\\n").filter(x=>x.trim());
+  if(!lines.length)return [];
+  const sep=lines[0].includes(";")?";":",";
+  const rows=lines.map(line=>line.split(sep).map(x=>x.trim().replace(/^"|"$/g,"")));
+  const header=rows[0].map(x=>x.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,""));
+  const find=(names)=>{for(const n of names){const i=header.indexOf(n);if(i>=0)return i}return -1};
+  const ni=[1,2,3,4,5].map(i=>find(["boule_"+i,"boule"+i,"numero_"+i,"numero"+i,"num_"+i,"num"+i]));
+  const si=[1,2].map(i=>find(["etoile_"+i,"etoile"+i,"star_"+i,"star"+i]));
+  const out=[];
+  for(let r=1;r<rows.length;r++){
+    let n=ni.every(i=>i>=0)?ni.map(i=>+rows[r][i]):[];
+    let s=si.every(i=>i>=0)?si.map(i=>+rows[r][i]):[];
+    if(n.length!==5||s.length!==2){
+      const v=rows[r].map(Number).filter(Number.isFinite);
+      n=v.filter(x=>x>=1&&x<=50).slice(0,5);
+      s=v.filter(x=>x>=1&&x<=12).slice(5,7);
+    }
+    n=[...new Set(n)].filter(x=>x>=1&&x<=50).sort((a,b)=>a-b);
+    s=[...new Set(s)].filter(x=>x>=1&&x<=12).sort((a,b)=>a-b);
+    if(n.length===5&&s.length===2)out.push({n,s});
+  }
+  return out;
+}
+$("file").onchange=async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  draws=parseCSV(await f.text());
+  $("dataState").textContent=draws.length+" tirages reconnus.";
+};
+
+function renderRows(rows,id,isStar=false){
+  $(id).innerHTML=rows.slice(0,15).map((x,i)=>`<tr><td>${i+1}</td><td>${isStar?"⭐ ":""}${x.id}</td><td>${x.score.toFixed(4)}</td><td>${x.families}/8</td><td>${x.strategies}</td></tr>`).join("");
+}
+function balls(a,star=false){return a.map(x=>`<span class="ball ${star?"star":""}">${x}</span>`).join("")}
+
+function makeWorker(){
+return new Worker(URL.createObjectURL(new Blob([`
+let stop=false;
+self.onmessage=e=>{
+ const d=e.data;
+ if(d.type==="stop"){stop=true;return}
+ stop=false;
+ const {strategies,grids,window}=d;
+ const draws=d.draws||[];
+ const nf=Array(51).fill(0), sf=Array(13).fill(0);
+ const famHits=Array.from({length:51},()=>new Uint16Array(8));
+ const starFamHits=Array.from({length:13},()=>new Uint16Array(8));
+ const stratHits=Array(51).fill(0), starStratHits=Array(13).fill(0);
+ const recentN=Array(51).fill(0), recentS=Array(13).fill(0);
+ const ds=draws.slice(-window);
+ ds.forEach((q,i)=>{const w=Math.exp(-(ds.length-i)/20);q.n.forEach(x=>recentN[x]+=w);q.s.forEach(x=>recentS[x]+=w)});
+ const freqN=Array(51).fill(0),freqS=Array(13).fill(0);
+ ds.forEach(q=>{q.n.forEach(x=>freqN[x]++);q.s.forEach(x=>freqS[x]++)});
+ const max=(a)=>Math.max(1,...a.slice(1));
+ const mf=max(freqN), mr=max(recentN), msf=max(freqS), msr=max(recentS);
+ const structure=(a)=>{
+   const sum=a.reduce((x,y)=>x+y,0), ev=a.filter(x=>x%2===0).length;
+   const decades=new Set(a.map(x=>Math.floor((x-1)/10))).size;
+   const gaps=a.slice(1).map((x,i)=>x-a[i]);
+   const gap=gaps.reduce((q,x)=>q+Math.min(x,10),0)/40;
+   const cen=1-Math.min(1,Math.abs(sum-127.5)/127.5);
+   const par=1-Math.abs(ev-2.5)/2.5;
+   return .35*cen+.25*par+.20*(decades/5)+.20*gap;
+ };
+ const starStructure=(a)=>.6*Math.abs(a[1]-a[0])/11+.4*((a[0]%2)!==(a[1]%2)?1:0);
+ const rng=(seed)=>{let x=seed>>>0;return()=>{x=(1664525*x+1013904223)>>>0;return x/4294967296}};
+ const grid=r=>{const a=[];while(a.length<5){const x=1+(r()*50|0);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)};
+ const stars=r=>{const a=[];while(a.length<2){const x=1+(r()*12|0);if(!a.includes(x))a.push(x)}return a.sort((a,b)=>a-b)};
+ const families=[
+   {name:"Fréquence",wf:1,wr:0,wst:0,anti:0},
+   {name:"Récence",wf:0,wr:1,wst:0,anti:0},
+   {name:"Structure",wf:0,wr:0,wst:1,anti:0},
+   {name:"Ensemble",wf:.42,wr:.28,wst:.30,anti:0},
+   {name:"Fréq+Réc",wf:.6,wr:.4,wst:0,anti:0},
+   {name:"Fréq+Structure",wf:.65,wr:0,wst:.35,anti:0},
+   {name:"Diversification",wf:.5,wr:0,wst:.5,anti:1},
+   {name:"Aléatoire",wf:0,wr:0,wst:0,anti:0}
+ ];
+ const total=strategies*grids;
+ let done=0,lastReport=performance.now();
+ for(let st=0;st<strategies && !stop;st++){
+   const f=st%8, p=families[f];
+   const r=rng((d.seed+st*2654435761)>>>0);
+   const localN=Array(51).fill(0),localS=Array(13).fill(0);
+   const wf=p.wf*(.7+r()*.6), wr=p.wr*(.7+r()*.6), ws=p.wst*(.7+r()*.6);
+   for(let g=0;g<grids && !stop;g++){
+     const a=grid(r), q=structure(a);
+     let score=0;
+     for(const x of a){
+       const fz=freqN[x]/mf, rz=recentN[x]/mr;
+       score += (wf*fz+wr*rz)/5;
+     }
+     score += ws*q;
+     if(p.anti)score=.5*(1-q)+.5*(1-score);
+     // Chaque grille contribue au comptage global ; les grilles mieux notées
+     // ont une pondération bornée qui évite de laisser une stratégie dominer.
+     const weight=0.5+Math.max(0,Math.min(1,score));
+     a.forEach(x=>{nf[x]+=weight;localN[x]+=weight});
+     const ss=stars(r);
+     const sfv=(ss.reduce((z,x)=>z+((freqS[x]/msf)*.55+(recentS[x]/msr)*.45),0)/2);
+     const sw=0.5+Math.max(0,Math.min(1,p.wst?sfv:.5+(.5*r())));
+     ss.forEach(x=>{sf[x]+=sw;localS[x]+=sw});
+     done++;
+     if(done%10000===0){
+       const now=performance.now();
+       if(now-lastReport>250){self.postMessage({type:"progress",done,total});lastReport=now}
+     }
+   }
+   // Une stratégie est comptée dans les familles où son meilleur signal local
+   // est présent : cela mesure la stabilité inter-stratégies.
+   const topN=[...Array(50)].map((_,i)=>i+1).sort((a,b)=>localN[b]-localN[a]).slice(0,10);
+   topN.forEach(x=>{stratHits[x]++;famHits[x][f]++});
+   const topS=[...Array(12)].map((_,i)=>i+1).sort((a,b)=>localS[b]-localS[a]).slice(0,5);
+   topS.forEach(x=>{starStratHits[x]++;starFamHits[x][f]++});
+   if(st%25===0)self.postMessage({type:"progress",done,total});
+ }
+ const nr=[...Array(50)].map((_,i)=>{const id=i+1;return{id,score:nf[id]/Math.max(1,strategies*grids),families:[...famHits[id]].filter(Boolean).length,strategies:stratHits[id]}}).sort((a,b)=>b.score-a.score);
+ const sr=[...Array(12)].map((_,i)=>{const id=i+1;return{id,score:sf[id]/Math.max(1,strategies*grids),families:[...starFamHits[id]].filter(Boolean).length,strategies:starStratHits[id]}}).sort((a,b)=>b.score-a.score);
+ const nums=nr.slice(0,5).sort((a,b)=>a.id-b.id).map(x=>x.id);
+ const sts=sr.slice(0,2).sort((a,b)=>a.id-b.id).map(x=>x.id);
+ self.postMessage({type:"done",done,total,numbers:nums,stars:sts,numRows:nr,starRows:sr});
+};
+`],{type:"text/javascript"})));
+}
+
+$("run").onclick=()=>{
+ const strategies=Math.min(10000,Math.max(1,+$("strategies").value||10000));
+ const grids=Math.min(100000,Math.max(100,+$("grids").value||100000));
+ const window=Math.min(500,Math.max(10,+$("window").value||80));
+ const total=strategies*grids;
+ $("total").textContent=total.toLocaleString("fr-FR");
+ $("done").textContent="0"; $("pbar").style.width="0%"; $("ptext").textContent="Calcul…";
+ $("run").disabled=true;$("stop").disabled=false;
+ $("numbers").textContent="—";$("stars").textContent="—";
+ $("numTable").innerHTML="";$("starTable").innerHTML="";
+ startTime=performance.now(); if(timer)clearInterval(timer);
+ timer=setInterval(()=>{const sec=(performance.now()-startTime)/1000;$("elapsed").textContent=sec.toFixed(1)+" s"},200);
+ worker=makeWorker();
+ worker.onmessage=e=>{
+   const m=e.data;
+   if(m.type==="progress"){
+     $("done").textContent=m.done.toLocaleString("fr-FR");
+     $("pbar").style.width=(100*m.done/m.total).toFixed(2)+"%";
+     const sec=(performance.now()-startTime)/1000;
+     $("rate").textContent=Math.round(m.done/Math.max(.001,sec)).toLocaleString("fr-FR")+"/s";
+     $("ptext").textContent=(100*m.done/m.total).toFixed(2)+" %";
+   }
+   if(m.type==="done"){
+     $("done").textContent=m.done.toLocaleString("fr-FR");
+     $("pbar").style.width="100%";$("ptext").textContent="Terminé.";
+     $("numbers").innerHTML=balls(m.numbers);$("stars").innerHTML=balls(m.stars,true);
+     renderRows(m.numRows,"numTable");renderRows(m.starRows,"starTable",true);
+     $("run").disabled=false;$("stop").disabled=true;worker.terminate();worker=null;
+     clearInterval(timer);
+   }
+ };
+ worker.postMessage({type:"run",strategies,grids,window,draws,seed:(Date.now()>>>0)});
+};
+$("stop").onclick=()=>{
+ if(worker){worker.postMessage({type:"stop"});setTimeout(()=>{worker&&worker.terminate();worker=null},150)};
+ $("run").disabled=false;$("stop").disabled=true;$("ptext").textContent="Arrêt demandé.";
+ clearInterval(timer);
+};
+</script>
+</body>
+</html>
