@@ -259,7 +259,11 @@ async function decodeEmbedded(id){
   const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
   return JSON.parse(await new Response(stream).text());
 }
-async function loadIntegratedData(){
+const csvResponse=await fetch('euromillions-tirages.csv?v='+Date.now(),{cache:'no-store'});
+if(!csvResponse.ok)throw new Error('CSV HTTP '+csvResponse.status);
+const embeddedDraws=parseCSV(await csvResponse.text());
+  
+  async function loadIntegratedData(){
   try{
     const embeddedDraws=await decodeEmbedded('embeddedData');
     const embeddedRanks=await decodeEmbedded('embeddedRanks');
