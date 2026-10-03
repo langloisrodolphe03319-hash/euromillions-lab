@@ -105,7 +105,32 @@ function parseJSON(text){const data=JSON.parse(text);const arr=Array.isArray(dat
 async function parseFile(file){const name=file.name.toLowerCase();if(name.endsWith('.json'))return parseJSON(await file.text());if(name.endsWith('.xlsx')||name.endsWith('.xls')){if(typeof XLSX==='undefined')throw new Error('Le lecteur Excel n’est pas disponible. Recharge la page puis réessaie.');const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});return parseRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''}));}return parseCSV(await file.text());}
 async function loadHistory(file){if(!file)return;try{draws=await parseFile(file);if(draws.length){$('dataState').innerHTML='<strong>'+draws.length.toLocaleString('fr-FR')+'</strong> tirages reconnus dans <strong>'+file.name+'</strong>.';$('dataState').style.color='var(--green)';}else{$('dataState').textContent='Aucun tirage reconnu. Vérifie que le fichier contient 5 numéros + 2 étoiles par ligne.';$('dataState').style.color='var(--red)';}}catch(err){draws=[];$('dataState').textContent='Impossible de lire ce fichier : '+err.message;$('dataState').style.color='var(--red)';}}
 $('file').onchange=e=>loadHistory(e.target.files[0]);$('drop').onclick=()=>$('file').click();['dragover','dragenter'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').style.borderColor='var(--blue)';}));['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').style.borderColor='#31516f';}));$('drop').addEventListener('drop',e=>loadHistory(e.dataTransfer.files[0]));
+async function loadAutomaticHistory(){
+  try{
+    const response=await fetch('euromillions-tirages.csv?v='+Date.now(),{cache:'no-store'});
+    if(!response.ok) throw new Error('HTTP '+response.status);
 
+    const text=await response.text();
+    const loaded=parseCSV(text);
+
+    if(!loaded.length) throw new Error('Aucun tirage reconnu');
+
+    draws=loaded;
+
+    $('dataState').innerHTML=
+      '<strong>'+draws.length.toLocaleString('fr-FR')+
+      '</strong> tirages chargés automatiquement depuis <strong>euromillions-tirages.csv</strong>.';
+
+    $('dataState').style.color='var(--green)';
+  }catch(err){
+    draws=[];
+    $('dataState').textContent=
+      'Chargement automatique impossible : '+err.message;
+    $('dataState').style.color='var(--red)';
+  }
+}
+
+document.addEventListener('DOMContentLoaded',loadAutomaticHistory);
 function renderRows(rows,id,isStar=false){
   $(id).innerHTML=rows.slice(0,15).map((x,i)=>`<tr><td>${i+1}</td><td>${isStar?"⭐ ":""}${x.id}</td><td>${x.score.toFixed(4)}</td><td>${x.families}/8</td><td>${x.strategies}</td></tr>`).join("");
 }
