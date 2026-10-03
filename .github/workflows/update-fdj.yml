@@ -3,7 +3,7 @@ name: Mise à jour automatique EuroMillions FDJ
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 5 * * 2,5"
+    - cron: "30 21 * * 2,5"
 
 permissions:
   contents: write
@@ -65,74 +65,40 @@ jobs:
                   for name in archive.namelist():
                       if not re.search(r"\.(csv|txt)$", name, re.I):
                           continue
-
                       raw = archive.read(name)
-
                       try:
                           text = raw.decode("utf-8-sig")
                       except UnicodeDecodeError:
                           text = raw.decode("cp1252", errors="replace")
-
-                      lines = [
-                          x for x in text.replace("\r", "").split("\n")
-                          if x.strip()
-                      ]
-
+                      lines = [x for x in text.replace("\r", "").split("\n") if x.strip()]
                       if len(lines) < 2:
                           continue
-
                       sep = delimiter(text)
                       rows = list(csv.reader(lines, delimiter=sep))
                       header = [norm(x) for x in rows[0]]
-
-                      date_i = find_index(
-                          header,
-                          ["date_tirage", "date_de_tirage", "date"]
-                      )
-
+                      date_i = find_index(header, ["date_tirage", "date_de_tirage", "date"])
                       ball_i = [
-                          find_index(
-                              header,
-                              [
-                                  f"boule_{i}",
-                                  f"boule{i}",
-                                  f"numero_{i}",
-                                  f"numero{i}",
-                                  f"num_{i}",
-                                  f"num{i}"
-                              ]
-                          )
+                          find_index(header, [f"boule_{i}", f"boule{i}",
+                                              f"numero_{i}", f"numero{i}",
+                                              f"num_{i}", f"num{i}"])
                           for i in range(1, 6)
                       ]
-
                       star_i = [
-                          find_index(
-                              header,
-                              [
-                                  f"etoile_{i}",
-                                  f"etoile{i}",
-                                  f"star_{i}",
-                                  f"star{i}"
-                              ]
-                          )
+                          find_index(header, [f"etoile_{i}", f"etoile{i}",
+                                              f"star_{i}", f"star{i}"])
                           for i in range(1, 3)
                       ]
 
                       for row in rows[1:]:
                           if date_i < 0 or date_i >= len(row):
                               continue
-
                           date = parse_date(row[date_i])
                           nums, stars = [], []
 
                           if all(0 <= i < len(row) for i in ball_i):
                               for i in ball_i:
                                   try:
-                                      v = int(
-                                          float(
-                                              str(row[i]).replace(",", ".")
-                                          )
-                                      )
+                                      v = int(float(str(row[i]).replace(",", ".")))
                                       if 1 <= v <= 50:
                                           nums.append(v)
                                   except (ValueError, TypeError):
@@ -141,11 +107,7 @@ jobs:
                           if all(0 <= i < len(row) for i in star_i):
                               for i in star_i:
                                   try:
-                                      v = int(
-                                          float(
-                                              str(row[i]).replace(",", ".")
-                                          )
-                                      )
+                                      v = int(float(str(row[i]).replace(",", ".")))
                                       if 1 <= v <= 12:
                                           stars.append(v)
                                   except (ValueError, TypeError):
@@ -153,30 +115,17 @@ jobs:
 
                           if len(set(nums)) != 5 or len(set(stars)) != 2:
                               numeric = []
-
                               for cell in row:
                                   try:
-                                      numeric.append(
-                                          int(
-                                              float(
-                                                  str(cell).replace(",", ".")
-                                              )
-                                          )
-                                      )
+                                      numeric.append(int(float(str(cell).replace(",", "."))))
                                   except (ValueError, TypeError):
                                       pass
-
                               possible = []
-
                               for v in numeric:
                                   if 1 <= v <= 50 and v not in possible:
                                       possible.append(v)
-
                               nums = possible[:5]
-                              stars = [
-                                  v for v in possible[5:]
-                                  if 1 <= v <= 12
-                              ][:2]
+                              stars = [v for v in possible[5:] if 1 <= v <= 12][:2]
 
                           nums = sorted(set(nums))
                           stars = sorted(set(stars))
@@ -186,26 +135,15 @@ jobs:
                                   "date": date,
                                   "n": nums,
                                   "s": stars,
-                                  "key": (
-                                      f"{date}|"
-                                      f"{'-'.join(map(str, nums))}|"
-                                      f"{'-'.join(map(str, stars))}"
-                                  )
+                                  "key": f"{date}|{'-'.join(map(str, nums))}|{'-'.join(map(str, stars))}"
                               })
-
               return out
 
           print("Lecture de la page historique FDJ…")
+          page = download(HISTORY_URL).decode("utf-8", errors="replace")
 
-          page = download(HISTORY_URL).decode(
-              "utf-8",
-              errors="replace"
-          )
-
-          # Les liens FDJ ne se terminent pas par .zip :
-          # ils pointent vers des endpoints /documentations/<uuid>
-          # qui renvoient directement le ZIP.
-
+          # Les liens FDJ ne se terminent pas par .zip : ils pointent vers
+          # des endpoints /documentations/<uuid> qui renvoient directement le ZIP.
           links = re.findall(
               r"href\s*=\s*[\"']([^\"']*documentations/[0-9a-f-]{20,}[^\"']*)[\"']",
               page,
@@ -213,84 +151,57 @@ jobs:
           )
 
           # Secours si l'URL apparaît directement dans le HTML/JSON.
-
           if not links:
               links = re.findall(
-                  r"https?://www\.sto\.api\.fdj\.fr/"
-                  r"anonymous/service-draw-info/v3/documentations/"
-                  r"[0-9a-f-]+",
+                  r"https?://www\.sto\.api\.fdj\.fr/anonymous/service-draw-info/v3/documentations/[0-9a-f-]+",
                   page,
                   flags=re.I
               )
 
           archive_urls = []
-
           for link in links:
               url = urljoin(HISTORY_URL, link)
-
               if url not in archive_urls:
                   archive_urls.append(url)
 
           if not archive_urls:
-              raise RuntimeError(
-                  "Aucune archive ZIP FDJ détectée sur la page historique."
-              )
+              raise RuntimeError("Aucune archive ZIP FDJ détectée sur la page historique.")
 
           print("Archives détectées:", len(archive_urls))
 
           all_draws = []
-
           for url in archive_urls:
               print("Téléchargement:", url)
-              all_draws.extend(
-                  parse_archive(download(url))
-              )
+              all_draws.extend(parse_archive(download(url)))
 
-          unique = {
-              d["key"]: d
-              for d in all_draws
-          }
-
-          draws = sorted(
-              unique.values(),
-              key=lambda d: d["date"]
-          )
+          unique = {d["key"]: d for d in all_draws}
+          draws = sorted(unique.values(), key=lambda d: d["date"])
 
           # Les archives FDJ peuvent avoir quelques jours de retard.
-          # On récupère donc aussi le dernier résultat publié
+          # On vérifie donc aussi le dernier résultat publié directement
           # sur la page officielle FDJ.
+          RESULTS_URL = "https://www.fdj.fr/jeux-de-tirage/resultats"
 
-          RESULTS_URL = (
-              "https://www.fdj.fr/jeux-de-tirage/resultats"
-          )
-
-          print(
-              "Vérification du dernier tirage "
-              "sur la page officielle FDJ…"
-          )
+          print("Vérification du dernier tirage sur la page officielle FDJ…")
 
           result_html = download(RESULTS_URL).decode(
               "utf-8",
               errors="replace"
           )
 
-          # On retire scripts/styles pour travailler
-          # sur le texte visible de la page.
-
+          # Conversion en texte visible.
           clean = re.sub(
               r"<script\b[^>]*>.*?</script>",
               " ",
               result_html,
               flags=re.I | re.S
           )
-
           clean = re.sub(
               r"<style\b[^>]*>.*?</style>",
               " ",
               clean,
               flags=re.I | re.S
           )
-
           clean = re.sub(
               r"<[^>]+>",
               " ",
@@ -300,21 +211,25 @@ jobs:
           import html as html_lib
 
           clean = html_lib.unescape(clean)
+          clean = re.sub(r"\s+", " ", clean).strip()
 
-          clean = re.sub(
-              r"\s+",
-              " ",
-              clean
-          )
+          latest = None
 
           marker = "Résultats EuroMillions - My Million"
           pos = clean.find(marker)
 
-          if pos >= 0:
-              window = clean[pos:pos + 5000]
+          if pos < 0:
+              # Variante sans accents.
+              marker = "Resultats EuroMillions - My Million"
+              pos = clean.find(marker)
 
+          if pos >= 0:
+              window = clean[pos:pos + 3000]
+
+              # FDJ affiche actuellement, juste après la date du tirage,
+              # les 5 numéros puis les 2 étoiles.
               date_match = re.search(
-                  r"(\d{2}/\d{2}/\d{4})",
+                  r"\b(\d{2}/\d{2}/\d{4})\b",
                   window
               )
 
@@ -324,46 +239,30 @@ jobs:
                       "%d/%m/%Y"
                   ).date().isoformat()
 
-                  # On cible la formulation éditoriale de FDJ
-                  # qui donne explicitement les 5 numéros sous
-                  # forme 10-22-35-7-8 puis les 2 étoiles.
+                  after_date = window[date_match.end():]
 
-                  combo_match = re.search(
-                      r"compos[ée]e?\s+des\s+num[ée]ros\s+"
-                      r"(\d{1,2}(?:\s*-\s*\d{1,2}){4})"
-                      r".*?deux\s+étoiles?,?\s*le\s+"
-                      r"(\d{1,2})\s+et\s+le\s+(\d{1,2})",
-                      window,
-                      flags=re.I
-                  )
+                  # On prend les sept premiers nombres isolés après la date.
+                  # Sur la page FDJ, ce sont les 5 numéros + 2 étoiles.
+                  values = [
+                      int(x)
+                      for x in re.findall(
+                          r"(?<!\d)(\d{1,2})(?!\d)",
+                          after_date
+                      )
+                  ]
 
-                  if combo_match:
-                      latest_nums = [
-                          int(x)
-                          for x in re.findall(
-                              r"\d{1,2}",
-                              combo_match.group(1)
-                          )
-                      ]
+                  if len(values) >= 7:
+                      latest_nums = values[:5]
+                      latest_stars = values[5:7]
 
-                      latest_stars = [
-                          int(combo_match.group(2)),
-                          int(combo_match.group(3))
-                      ]
-
-                      if (
-                          len(latest_nums) == 5
-                          and len(set(latest_nums)) == 5
-                          and all(
-                              1 <= x <= 50
-                              for x in latest_nums
-                          )
+                      valid = (
+                          len(set(latest_nums)) == 5
+                          and all(1 <= x <= 50 for x in latest_nums)
                           and len(set(latest_stars)) == 2
-                          and all(
-                              1 <= x <= 12
-                              for x in latest_stars
-                          )
-                      ):
+                          and all(1 <= x <= 12 for x in latest_stars)
+                      )
+
+                      if valid:
                           latest = {
                               "date": latest_date,
                               "n": sorted(latest_nums),
@@ -389,115 +288,96 @@ jobs:
                               latest
                           )
 
+                          print(
+                              "Total de tirages après "
+                              "vérification:",
+                              len(draws)
+                          )
                       else:
                           print(
-                              "Attention: combinaison FDJ "
-                              "décodée mais invalide:",
-                              latest_nums,
-                              latest_stars
+                              "Attention: les 7 premières valeurs "
+                              "FDJ ne forment pas une combinaison valide:",
+                              values[:7]
                           )
-
                   else:
                       print(
-                          "Attention: formulation de combinaison "
-                          "FDJ introuvable dans la page officielle."
+                          "Attention: moins de 7 nombres trouvés "
+                          "après la date FDJ:",
+                          values
                       )
-
               else:
                   print(
-                      "Attention: date du dernier résultat "
-                      "FDJ introuvable."
+                      "Attention: date du dernier tirage FDJ "
+                      "introuvable."
                   )
-
           else:
               print(
-                  "Attention: bloc de résultats "
-                  "FDJ introuvable."
+                  "Attention: bloc EuroMillions "
+                  "introuvable sur la page FDJ."
+              )
+
+          # Un workflow vert avec un CSV ancien est interdit :
+          # si la page officielle FDJ ne permet pas de récupérer le dernier
+          # tirage, le job doit échouer afin de rendre le problème visible.
+          if latest is None:
+              raise RuntimeError(
+                  "Impossible de récupérer automatiquement le dernier "
+                  "tirage EuroMillions depuis la page officielle FDJ."
               )
 
           if not draws:
+              raise RuntimeError("Aucun tirage EuroMillions reconnu.")
+
+          if draws[-1]["date"] < latest["date"]:
+              print(
+                  "Le dernier tirage de l'archive était",
+                  draws[-1]["date"],
+                  "et le dernier tirage officiel est",
+                  latest["date"],
+                  "=> le tirage récent a été ajouté."
+              )
+          elif draws[-1]["date"] == latest["date"]:
+              print(
+                  "L'archive contient déjà la date du dernier tirage officiel:",
+                  latest["date"]
+              )
+          else:
               raise RuntimeError(
-                  "Aucun tirage EuroMillions reconnu."
+                  "Incohérence de dates: l'archive FDJ semble plus récente "
+                  "que la page officielle des résultats."
               )
 
-          Path("data").mkdir(
-              exist_ok=True
-          )
+          Path("data").mkdir(exist_ok=True)
 
-          with open(
-              "euromillions-tirages.csv",
-              "w",
-              encoding="utf-8-sig",
-              newline=""
-          ) as f:
-
+          with open("euromillions-tirages.csv", "w", encoding="utf-8-sig", newline="") as f:
               writer = csv.writer(f)
-
-              writer.writerow([
-                  "date",
-                  "boule_1",
-                  "boule_2",
-                  "boule_3",
-                  "boule_4",
-                  "boule_5",
-                  "etoile_1",
-                  "etoile_2"
-              ])
-
+              writer.writerow(["date", "boule_1", "boule_2", "boule_3", "boule_4", "boule_5",
+                               "etoile_1", "etoile_2"])
               for d in draws:
-                  writer.writerow([
-                      d["date"],
-                      *d["n"],
-                      *d["s"]
-                  ])
+                  writer.writerow([d["date"], *d["n"], *d["s"]])
 
-          Path(
-              "data/fdj-draws.json"
-          ).write_text(
-              json.dumps(
-                  {
-                      "source": "FDJ",
-                      "updated_at": (
-                          datetime.utcnow().isoformat()
-                          + "Z"
-                      ),
-                      "draw_count": len(draws),
-                      "draws": draws
-                  },
-                  ensure_ascii=False,
-                  separators=(",", ":")
-              ),
+          Path("data/fdj-draws.json").write_text(
+              json.dumps({
+                  "source": "FDJ",
+                  "updated_at": datetime.utcnow().isoformat() + "Z",
+                  "draw_count": len(draws),
+                  "draws": draws
+              }, ensure_ascii=False, separators=(",", ":")),
               encoding="utf-8"
           )
 
-          Path(
-              "data/fdj-meta.json"
-          ).write_text(
-              json.dumps(
-                  {
-                      "source": "FDJ",
-                      "updated_at": (
-                          datetime.utcnow().isoformat()
-                          + "Z"
-                      ),
-                      "draw_count": len(draws),
-                      "latest_draw": draws[-1]
-                  },
-                  ensure_ascii=False,
-                  indent=2
-              ),
+          Path("data/fdj-meta.json").write_text(
+              json.dumps({
+                  "source": "FDJ",
+                  "updated_at": datetime.utcnow().isoformat() + "Z",
+                  "draw_count": len(draws),
+                  "latest_draw": draws[-1]
+              }, ensure_ascii=False, indent=2),
               encoding="utf-8"
           )
 
-          print(
-              "Tirages exportés:",
-              len(draws)
-          )
-
-          print(
-              "Dernier tirage:",
-              draws[-1]
-          )
+          print("Tirages exportés:", len(draws))
+          print("Dernier tirage:", draws[-1])
 
       - name: Vérifier le CSV
         shell: python
@@ -505,58 +385,26 @@ jobs:
           import csv
           from pathlib import Path
 
-          path = Path(
-              "euromillions-tirages.csv"
-          )
-
+          path = Path("euromillions-tirages.csv")
           if not path.exists():
-              raise SystemExit(
-                  "euromillions-tirages.csv absent"
-              )
+              raise SystemExit("euromillions-tirages.csv absent")
 
-          with path.open(
-              encoding="utf-8-sig",
-              newline=""
-          ) as f:
-              rows = list(
-                  csv.reader(f)
-              )
+          with path.open(encoding="utf-8-sig", newline="") as f:
+              rows = list(csv.reader(f))
 
-          expected = [
-              "date",
-              "boule_1",
-              "boule_2",
-              "boule_3",
-              "boule_4",
-              "boule_5",
-              "etoile_1",
-              "etoile_2"
-          ]
+          expected = ["date", "boule_1", "boule_2", "boule_3", "boule_4", "boule_5",
+                      "etoile_1", "etoile_2"]
 
           if len(rows) < 2 or rows[0] != expected:
-              raise SystemExit(
-                  "CSV invalide"
-              )
+              raise SystemExit("CSV invalide")
 
-          print(
-              "CSV valide:",
-              len(rows) - 1,
-              "tirages"
-          )
+          print("CSV valide:", len(rows) - 1, "tirages")
 
       - name: Commit et publier
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add \
-            euromillions-tirages.csv \
-            data/fdj-draws.json \
-            data/fdj-meta.json
-
+          git add euromillions-tirages.csv data/fdj-draws.json data/fdj-meta.json
           git diff --cached --quiet && exit 0
-
-          git commit \
-            -m "Update EuroMillions FDJ data"
-
+          git commit -m "Update EuroMillions FDJ data"
           git push
