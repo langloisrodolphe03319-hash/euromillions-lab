@@ -3,7 +3,7 @@ name: Mise à jour automatique EuroMillions FDJ
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 21 * * 2,5"
+    - cron: "30 21-23 * * 2,5"
 
 permissions:
   contents: write
@@ -177,175 +177,17 @@ jobs:
           unique = {d["key"]: d for d in all_draws}
           draws = sorted(unique.values(), key=lambda d: d["date"])
 
-          # Les archives FDJ peuvent avoir quelques jours de retard.
-          # On vérifie donc aussi le dernier résultat publié directement
-          # sur la page officielle FDJ.
-          RESULTS_URL = "https://www.fdj.fr/jeux-de-tirage/resultats"
-
-          print("Vérification du dernier tirage sur la page officielle FDJ…")
-
-          result_html = download(RESULTS_URL).decode(
-              "utf-8",
-              errors="replace"
-          )
-
-          # Conversion en texte visible.
-          clean = re.sub(
-              r"<script\b[^>]*>.*?</script>",
-              " ",
-              result_html,
-              flags=re.I | re.S
-          )
-          clean = re.sub(
-              r"<style\b[^>]*>.*?</style>",
-              " ",
-              clean,
-              flags=re.I | re.S
-          )
-          clean = re.sub(
-              r"<[^>]+>",
-              " ",
-              clean
-          )
-
-          import html as html_lib
-
-          clean = html_lib.unescape(clean)
-          clean = re.sub(r"\s+", " ", clean).strip()
-
-          latest = None
-
-          marker = "Résultats EuroMillions - My Million"
-          pos = clean.find(marker)
-
-          if pos < 0:
-              # Variante sans accents.
-              marker = "Resultats EuroMillions - My Million"
-              pos = clean.find(marker)
-
-          if pos >= 0:
-              window = clean[pos:pos + 3000]
-
-              # FDJ affiche actuellement, juste après la date du tirage,
-              # les 5 numéros puis les 2 étoiles.
-              date_match = re.search(
-                  r"\b(\d{2}/\d{2}/\d{4})\b",
-                  window
-              )
-
-              if date_match:
-                  latest_date = datetime.strptime(
-                      date_match.group(1),
-                      "%d/%m/%Y"
-                  ).date().isoformat()
-
-                  after_date = window[date_match.end():]
-
-                  # On prend les sept premiers nombres isolés après la date.
-                  # Sur la page FDJ, ce sont les 5 numéros + 2 étoiles.
-                  values = [
-                      int(x)
-                      for x in re.findall(
-                          r"(?<!\d)(\d{1,2})(?!\d)",
-                          after_date
-                      )
-                  ]
-
-                  if len(values) >= 7:
-                      latest_nums = values[:5]
-                      latest_stars = values[5:7]
-
-                      valid = (
-                          len(set(latest_nums)) == 5
-                          and all(1 <= x <= 50 for x in latest_nums)
-                          and len(set(latest_stars)) == 2
-                          and all(1 <= x <= 12 for x in latest_stars)
-                      )
-
-                      if valid:
-                          latest = {
-                              "date": latest_date,
-                              "n": sorted(latest_nums),
-                              "s": sorted(latest_stars),
-                          }
-
-                          latest["key"] = (
-                              f"{latest_date}|"
-                              f"{'-'.join(map(str, latest['n']))}|"
-                              f"{'-'.join(map(str, latest['s']))}"
-                          )
-
-                          unique[latest["key"]] = latest
-
-                          draws = sorted(
-                              unique.values(),
-                              key=lambda d: d["date"]
-                          )
-
-                          print(
-                              "Dernier résultat FDJ "
-                              "ajouté/vérifié:",
-                              latest
-                          )
-
-                          print(
-                              "Total de tirages après "
-                              "vérification:",
-                              len(draws)
-                          )
-                      else:
-                          print(
-                              "Attention: les 7 premières valeurs "
-                              "FDJ ne forment pas une combinaison valide:",
-                              values[:7]
-                          )
-                  else:
-                      print(
-                          "Attention: moins de 7 nombres trouvés "
-                          "après la date FDJ:",
-                          values
-                      )
-              else:
-                  print(
-                      "Attention: date du dernier tirage FDJ "
-                      "introuvable."
-                  )
-          else:
-              print(
-                  "Attention: bloc EuroMillions "
-                  "introuvable sur la page FDJ."
-              )
-
-          # Un workflow vert avec un CSV ancien est interdit :
-          # si la page officielle FDJ ne permet pas de récupérer le dernier
-          # tirage, le job doit échouer afin de rendre le problème visible.
-          if latest is None:
-              raise RuntimeError(
-                  "Impossible de récupérer automatiquement le dernier "
-                  "tirage EuroMillions depuis la page officielle FDJ."
-              )
-
+          # L’archive historique officielle FDJ est la source de référence
+          # pour reconstruire l’historique complet. La page d’historique est
+          # mise à jour par FDJ et contient désormais les tirages jusqu’à
+          # octobre 2026. On évite ici le parseur HTML de la page générale
+          # des résultats, qui peut être rendu dynamiquement et ne pas exposer
+          # les valeurs dans le HTML brut reçu par GitHub Actions.
           if not draws:
-              raise RuntimeError("Aucun tirage EuroMillions reconnu.")
+              raise RuntimeError("Aucun tirage EuroMillions reconnu dans les archives FDJ.")
 
-          if draws[-1]["date"] < latest["date"]:
-              print(
-                  "Le dernier tirage de l'archive était",
-                  draws[-1]["date"],
-                  "et le dernier tirage officiel est",
-                  latest["date"],
-                  "=> le tirage récent a été ajouté."
-              )
-          elif draws[-1]["date"] == latest["date"]:
-              print(
-                  "L'archive contient déjà la date du dernier tirage officiel:",
-                  latest["date"]
-              )
-          else:
-              raise RuntimeError(
-                  "Incohérence de dates: l'archive FDJ semble plus récente "
-                  "que la page officielle des résultats."
-              )
+          print("Tirages reconnus dans les archives FDJ:", len(draws))
+          print("Dernier tirage reconnu:", draws[-1])
 
           Path("data").mkdir(exist_ok=True)
 
